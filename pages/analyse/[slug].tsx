@@ -3,16 +3,8 @@ import Head from 'next/head'
 import Link from 'next/link'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
-import Nav from '../components/Nav'
-import { getPublishedCases, getCaseBySlug, type InvestmentCase } from '../lib/supabase'
-import { generateHTML } from '@tiptap/html'
-import StarterKit from '@tiptap/starter-kit'
-import Heading from '@tiptap/extension-heading'
-import Table from '@tiptap/extension-table'
-import TableRow from '@tiptap/extension-table-row'
-import TableCell from '@tiptap/extension-table-cell'
-import TableHeader from '@tiptap/extension-table-header'
-import Highlight from '@tiptap/extension-highlight'
+import Nav from '../../components/Nav'
+import { getPublishedCases, getCaseBySlug, type InvestmentCase } from '../../lib/supabase'
 
 interface Props {
   case_: InvestmentCase
@@ -193,6 +185,40 @@ export default function AnalysePage({ case_, htmlContent }: Props) {
   )
 }
 
+function tiptapToHtml(doc: any): string {
+  if (!doc?.content) return ''
+  return doc.content.map((node: any) => nodeToHtml(node)).join('')
+}
+
+function nodeToHtml(node: any): string {
+  const inner = () => node.content?.map((n: any) => nodeToHtml(n)).join('') ?? ''
+  const marks = (text: string, marks: any[] = []) =>
+    marks.reduce((t, m) => {
+      if (m.type === 'bold') return `<strong>${t}</strong>`
+      if (m.type === 'italic') return `<em>${t}</em>`
+      if (m.type === 'highlight') return `<mark>${t}</mark>`
+      if (m.type === 'link') return `<a href="${m.attrs?.href}">${t}</a>`
+      return t
+    }, text)
+
+  switch (node.type) {
+    case 'text': return marks(node.text ?? '', node.marks)
+    case 'paragraph': return `<p>${inner()}</p>`
+    case 'heading': return `<h${node.attrs?.level ?? 2}>${inner()}</h${node.attrs?.level ?? 2}>`
+    case 'bulletList': return `<ul>${inner()}</ul>`
+    case 'orderedList': return `<ol>${inner()}</ol>`
+    case 'listItem': return `<li>${inner()}</li>`
+    case 'blockquote': return `<blockquote>${inner()}</blockquote>`
+    case 'horizontalRule': return `<hr>`
+    case 'hardBreak': return `<br>`
+    case 'table': return `<table>${inner()}</table>`
+    case 'tableRow': return `<tr>${inner()}</tr>`
+    case 'tableHeader': return `<th>${inner()}</th>`
+    case 'tableCell': return `<td>${inner()}</td>`
+    default: return inner()
+  }
+}
+
 export const getStaticPaths: GetStaticPaths = async () => {
   const cases = await getPublishedCases()
   return {
@@ -206,18 +232,11 @@ export const getStaticProps: GetStaticProps = async ({ params }) => {
   const case_ = await getCaseBySlug(slug)
   if (!case_) return { notFound: true }
 
-  // Convert TipTap JSON to HTML server-side
+  // Serialize TipTap JSON to basic HTML
   let htmlContent = ''
   try {
-    htmlContent = generateHTML(case_.content as any, [
-      StarterKit,
-      Heading,
-      Table,
-      TableRow,
-      TableCell,
-      TableHeader,
-      Highlight,
-    ])
+    const content = case_.content as any
+    htmlContent = tiptapToHtml(content)
   } catch {
     htmlContent = '<p>Contenu non disponible.</p>'
   }
