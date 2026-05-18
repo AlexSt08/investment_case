@@ -3,10 +3,10 @@ import Head from 'next/head'
 import Link from 'next/link'
 import { useRouter } from 'next/router'
 import dynamic from 'next/dynamic'
-import { supabase, getAllSectors, getAllCompanies, type Sector, type Company, type Rating } from '../../lib/supabase'
+import { supabase, getAllSectors, getAllCompanies, type Sector, type Company, type Rating } from '../lib/supabase'
 
 // Load editor client-side only (TipTap doesn't support SSR)
-const RichEditor = dynamic(() => import('../../components/RichEditor'), { ssr: false })
+const RichEditor = dynamic(() => import('../components/RichEditor'), { ssr: false })
 
 interface Props {
   caseId?: string  // if set → edit mode
