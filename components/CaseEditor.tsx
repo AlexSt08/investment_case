@@ -175,14 +175,14 @@ function JoditWrapper({ value, onChange }: { value: string; onChange: (html: str
     if (!document.querySelector('link[href*="jodit"]')) {
       const link = document.createElement('link')
       link.rel = 'stylesheet'
-      link.href = 'https://cdnjs.cloudflare.com/ajax/libs/jodit/4.7.6/es2021/jodit.min.css'
+      link.href = 'https://unpkg.com/jodit@4.7.6/es2021/jodit.min.css'
       document.head.appendChild(link)
     }
 
     // Load JS
     if (!document.querySelector('script[src*="jodit"]')) {
       const script = document.createElement('script')
-      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jodit/4.7.6/es2021/jodit.min.js'
+      script.src = 'https://unpkg.com/jodit@4.7.6/es2021/jodit.min.js'
       script.onload = initJodit
       script.onerror = () => console.error('Failed to load Jodit')
       document.head.appendChild(script)
