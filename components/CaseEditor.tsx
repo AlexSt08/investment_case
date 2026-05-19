@@ -109,20 +109,24 @@ function ChartModal({ onInsert, onClose }: { onInsert: (html: string) => void; o
 
 // Jodit Editor via CDN
 function JoditWrapper({ value, onChange }: { value: string; onChange: (html: string) => void }) {
-  const containerRef = useRef<HTMLDivElement>(null)
   const editorRef = useRef<any>(null)
   const [ready, setReady] = useState(false)
+  const editorId = useRef(`jodit_${Math.random().toString(36).slice(2)}`)
   const initialValue = useRef(value)
+  const destroyed = useRef(false)
 
   useEffect(() => {
+    destroyed.current = false
+
     const initJodit = () => {
-      if (!containerRef.current || editorRef.current) return
+      if (destroyed.current) return
       const J = (window as any).Jodit
       if (!J) return
+      const el = document.getElementById(editorId.current)
+      if (!el || editorRef.current) return
 
-      const editor = J.make(containerRef.current, {
+      const editor = J.make(el, {
         language: 'fr',
-        theme: 'default',
         height: 560,
         minHeight: 400,
         toolbarButtonSize: 'middle',
@@ -144,49 +148,61 @@ function JoditWrapper({ value, onChange }: { value: string; onChange: (html: str
         showCharsCounter: false,
         showWordsCounter: false,
         toolbarAdaptive: false,
-        style: {
-          background: 'var(--bg-card)',
-          color: 'var(--text-primary)',
-          fontSize: '0.95rem',
-          fontFamily: 'var(--font-body)',
-          lineHeight: '1.8',
-          padding: '20px 24px',
-        },
       })
 
       editor.value = initialValue.current
-      editor.events.on('change', () => onChange(editor.value))
+      editor.events.on('change', () => { if (!destroyed.current) onChange(editor.value) })
       editorRef.current = editor
       setReady(true)
     }
 
-    if ((window as any).Jodit) { initJodit(); return }
+    const tryInit = () => {
+      if ((window as any).Jodit) { initJodit(); return }
+      // Script already loading — poll for it
+      const interval = setInterval(() => {
+        if ((window as any).Jodit) { clearInterval(interval); initJodit() }
+      }, 100)
+      setTimeout(() => clearInterval(interval), 10000)
+    }
 
-    const link = document.createElement('link')
-    link.rel = 'stylesheet'
-    link.href = 'https://cdnjs.cloudflare.com/ajax/libs/jodit/4.7.6/es2021/jodit.min.css'
-    document.head.appendChild(link)
+    if ((window as any).Jodit) {
+      // Already loaded
+      setTimeout(initJodit, 0)
+      return
+    }
 
-    const script = document.createElement('script')
-    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jodit/4.7.6/es2021/jodit.min.js'
-    script.onload = initJodit
-    document.head.appendChild(script)
+    // Load CSS
+    if (!document.querySelector('link[href*="jodit"]')) {
+      const link = document.createElement('link')
+      link.rel = 'stylesheet'
+      link.href = 'https://cdnjs.cloudflare.com/ajax/libs/jodit/4.7.6/es2021/jodit.min.css'
+      document.head.appendChild(link)
+    }
+
+    // Load JS
+    if (!document.querySelector('script[src*="jodit"]')) {
+      const script = document.createElement('script')
+      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jodit/4.7.6/es2021/jodit.min.js'
+      script.onload = initJodit
+      script.onerror = () => console.error('Failed to load Jodit')
+      document.head.appendChild(script)
+    } else {
+      tryInit()
+    }
 
     return () => {
+      destroyed.current = true
       if (editorRef.current) {
-        editorRef.current.destruct()
+        try { editorRef.current.destruct() } catch {}
         editorRef.current = null
       }
     }
   }, [])
 
-  // Sync external value changes (e.g. on case load)
+  // Sync on ready
   useEffect(() => {
-    if (editorRef.current && ready) {
-      const current = editorRef.current.value
-      if (current !== value && value !== '') {
-        editorRef.current.value = value
-      }
+    if (editorRef.current && ready && value && editorRef.current.value !== value) {
+      editorRef.current.value = value
     }
   }, [ready])
 
@@ -217,12 +233,12 @@ function JoditWrapper({ value, onChange }: { value: string; onChange: (html: str
         .jodit-dialog__content { background: var(--bg-elevated) !important; color: var(--text-primary) !important; }
         .jodit-source__mirror { background: var(--bg-card) !important; color: var(--accent) !important; font-family: var(--font-mono) !important; }
       `}</style>
-      <div ref={containerRef} />
       {!ready && (
         <div style={{ minHeight: 520, background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <p style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }}>Chargement de l'éditeur…</p>
         </div>
       )}
+      <div id={editorId.current} style={{ display: ready ? 'block' : 'none' }} />
     </>
   )
 }
