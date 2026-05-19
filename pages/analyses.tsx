@@ -18,14 +18,22 @@ export default function Analyses({ cases, sectors }: Props) {
   const [search, setSearch] = useState('')
 
   const filtered = cases.filter(c => {
+    const caseCompanies = c.case_companies ?? []
+
     const sectorMatch = activeSector === 'all' ||
-      c.sectors?.slug === activeSector ||
-      c.companies?.sectors?.slug === activeSector
-    const ratingMatch = activeRating === 'Tous' || c.rating === activeRating
+      c.sectors?.slug === activeSector
+
+    const ratingMatch = activeRating === 'Tous' ||
+      c.rating === activeRating ||
+      caseCompanies.some(cc => cc.rating === activeRating)
+
     const searchMatch = !search ||
       c.title.toLowerCase().includes(search.toLowerCase()) ||
-      c.companies?.ticker.toLowerCase().includes(search.toLowerCase()) ||
-      c.companies?.name.toLowerCase().includes(search.toLowerCase())
+      caseCompanies.some(cc =>
+        cc.companies?.ticker.toLowerCase().includes(search.toLowerCase()) ||
+        cc.companies?.name.toLowerCase().includes(search.toLowerCase())
+      )
+
     return sectorMatch && ratingMatch && searchMatch
   })
 
