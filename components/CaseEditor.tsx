@@ -120,9 +120,11 @@ function CKEditorWrapper({ value, onChange }: { value: string; onChange: (html: 
       const CK = (window as any).ClassicEditor
       if (!CK) return
       CK.create(containerRef.current, {
-        toolbar: { items: ['heading', '|', 'bold', 'italic', 'underline', 'strikethrough', '|', 'fontColor', 'fontBackgroundColor', 'fontSize', '|', 'alignment', '|', 'bulletedList', 'numberedList', 'outdent', 'indent', '|', 'blockQuote', 'insertTable', 'horizontalLine', '|', 'link', 'mediaEmbed', '|', 'undo', 'redo', '|', 'removeFormat'], shouldNotGroupWhenFull: true },
+        toolbar: { items: ['heading', 'fontSize', 'fontFamily', '|', 'bold', 'italic', 'underline', 'strikethrough', 'subscript', 'superscript', '|', 'fontColor', 'fontBackgroundColor', 'highlight', '|', 'alignment', '|', 'bulletedList', 'numberedList', 'todoList', 'outdent', 'indent', '|', 'blockQuote', 'insertTable', 'horizontalLine', 'pageBreak', '|', 'link', 'insertImage', 'mediaEmbed', '|', 'specialCharacters', 'findAndReplace', '|', 'undo', 'redo', '|', 'removeFormat', 'sourceEditing'], shouldNotGroupWhenFull: true },
         heading: { options: [{ model: 'paragraph', title: 'Paragraphe', class: 'ck-heading_paragraph' }, { model: 'heading1', view: 'h1', title: 'Titre 1', class: 'ck-heading_heading1' }, { model: 'heading2', view: 'h2', title: 'Titre 2', class: 'ck-heading_heading2' }, { model: 'heading3', view: 'h3', title: 'Titre 3', class: 'ck-heading_heading3' }] },
-        table: { contentToolbar: ['tableColumn', 'tableRow', 'mergeTableCells'] },
+        table: { contentToolbar: ['tableColumn', 'tableRow', 'mergeTableCells', 'tableProperties', 'tableCellProperties'] },
+        fontFamily: { options: ['default', 'Arial, Helvetica, sans-serif', 'Georgia, serif', 'Courier New, Courier, monospace', 'Trebuchet MS, Helvetica, sans-serif', 'Verdana, Geneva, sans-serif'] },
+        highlight: { options: [{ model: 'yellowMarker', class: 'marker-yellow', title: 'Yellow marker', color: 'var(--ck-highlight-marker-yellow)', type: 'marker' }, { model: 'greenMarker', class: 'marker-green', title: 'Green marker', color: 'var(--ck-highlight-marker-green)', type: 'marker' }, { model: 'pinkMarker', class: 'marker-pink', title: 'Pink marker', color: 'var(--ck-highlight-marker-pink)', type: 'marker' }, { model: 'blueMarker', class: 'marker-blue', title: 'Blue marker', color: 'var(--ck-highlight-marker-blue)', type: 'marker' }] },
         fontSize: { options: [10, 12, 14, 'default', 18, 20, 24, 28] },
         initialData: initialValue.current,
       }).then((editor: any) => {
@@ -135,10 +137,10 @@ function CKEditorWrapper({ value, onChange }: { value: string; onChange: (html: 
     if ((window as any).ClassicEditor) { loadAndInit(); return }
     const link = document.createElement('link')
     link.rel = 'stylesheet'
-    link.href = 'https://cdn.ckeditor.com/ckeditor5/41.4.2/classic/ckeditor.css'
+    link.href = 'https://cdn.ckeditor.com/ckeditor5/41.4.2/super-build/ckeditor.css'
     document.head.appendChild(link)
     const script = document.createElement('script')
-    script.src = 'https://cdn.ckeditor.com/ckeditor5/41.4.2/classic/ckeditor.js'
+    script.src = 'https://cdn.ckeditor.com/ckeditor5/41.4.2/super-build/ckeditor.js'
     script.onload = loadAndInit
     document.head.appendChild(script)
 
