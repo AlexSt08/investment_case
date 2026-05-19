@@ -13,7 +13,6 @@ export default function AdminSocietes() {
   // New company form
   const [ticker, setTicker] = useState('')
   const [name, setName] = useState('')
-  const [exchange, setExchange] = useState('NASDAQ')
   const [description, setDescription] = useState('')
   const [sectorId, setSectorId] = useState('')
   const [saving, setSaving] = useState(false)
@@ -46,14 +45,12 @@ export default function AdminSocietes() {
     const { error } = await supabase.from('companies').insert({
       ticker: ticker.trim().toUpperCase(),
       name: name.trim(),
-      exchange,
       description: description.trim() || null,
       sector_id: sectorId || null,
     })
     if (error) {
       setMsg('Erreur : ' + (error.message.includes('unique') ? 'ce ticker existe déjà.' : error.message))
     } else {
-      setTicker(''); setName(''); setDescription(''); setSectorId(''); setExchange('NASDAQ')
       setMsg('✓ Société ajoutée.')
       loadData()
     }
@@ -102,8 +99,6 @@ export default function AdminSocietes() {
                 </div>
                 <div className="form-group" style={{ marginBottom: 0 }}>
                   <label className="form-label">Bourse</label>
-                  <select className="form-select" value={exchange} onChange={e => setExchange(e.target.value)}>
-                    {['NASDAQ', 'NYSE', 'AMEX', 'OTC'].map(ex => <option key={ex}>{ex}</option>)}
                   </select>
                 </div>
               </div>
@@ -159,7 +154,6 @@ export default function AdminSocietes() {
                         <span className="badge-ticker">{c.ticker}</span>
                       </td>
                       <td style={{ padding: '12px 16px', fontSize: '0.88rem', color: 'var(--text-primary)' }}>{c.name}</td>
-                      <td style={{ padding: '12px 16px', fontSize: '0.78rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{c.exchange}</td>
                       <td style={{ padding: '12px 16px', fontSize: '0.8rem', color: (c as any).sectors?.color || 'var(--text-secondary)' }}>
                         {(c as any).sectors?.name || '—'}
                       </td>

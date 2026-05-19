@@ -22,7 +22,6 @@ export interface Company {
   ticker: string
   name: string
   sector_id: string
-  exchange: string
   description: string
   logo_url?: string
   sectors?: Sector
@@ -74,7 +73,7 @@ export async function getPublishedCases(): Promise<InvestmentCase[]> {
       investment_case_tags(tags(id, slug, name)),
       investment_case_companies(
         id, company_id, rating, target_price, upside,
-        companies(id, ticker, name, exchange, logo_url, sector_id)
+        companies(id, ticker, name, logo_url, sector_id)
       )
     `)
     .eq('published', true)
@@ -93,7 +92,7 @@ export async function getCaseBySlug(slug: string): Promise<InvestmentCase | null
       investment_case_tags(tags(id, slug, name)),
       investment_case_companies(
         id, company_id, rating, target_price, upside,
-        companies(id, ticker, name, exchange, logo_url, sector_id)
+        companies(id, ticker, name, logo_url, sector_id)
       )
     `)
     .eq('slug', slug)
@@ -113,7 +112,7 @@ export async function getCasesBySector(sectorSlug: string): Promise<InvestmentCa
       investment_case_tags(tags(id, slug, name)),
       investment_case_companies(
         id, company_id, rating, target_price, upside,
-        companies(id, ticker, name, exchange, logo_url)
+        companies(id, ticker, name, logo_url)
       )
     `)
     .eq('sectors.slug', sectorSlug)
@@ -141,7 +140,7 @@ export async function getCasesByTicker(ticker: string): Promise<InvestmentCase[]
       sectors(id, slug, name, color),
       investment_case_companies(
         id, company_id, rating, target_price, upside,
-        companies(id, ticker, name, exchange, logo_url)
+        companies(id, ticker, name, logo_url)
       )
     `)
     .in('id', ids)
@@ -180,7 +179,7 @@ export async function getAllCasesAdmin(): Promise<InvestmentCase[]> {
       sectors(id, slug, name, color),
       investment_case_companies(
         id, company_id, rating, target_price, upside,
-        companies(id, ticker, name, exchange)
+        companies(id, ticker, name)
       )
     `)
     .order('created_at', { ascending: false })
@@ -198,7 +197,7 @@ export async function getCaseByIdAdmin(id: string): Promise<InvestmentCase | nul
       investment_case_tags(tags(id, slug, name)),
       investment_case_companies(
         id, company_id, rating, target_price, upside,
-        companies(id, ticker, name, exchange, logo_url, sector_id)
+        companies(id, ticker, name, logo_url, sector_id)
       )
     `)
     .eq('id', id)

@@ -54,7 +54,6 @@ export default function TickerPage({ company, cases }: Props) {
                     {company.ticker}
                   </span>
                   <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-                    {company.exchange}
                   </span>
                   {sector && (
                     <Link href={`/secteur/${sector.slug}`} style={{
