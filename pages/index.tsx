@@ -170,9 +170,17 @@ export default function Home({ cases, sectors }: Props) {
             Les analyses publiées sur ce site sont fournies à titre informatif uniquement et ne constituent pas un conseil en investissement.
             Investir comporte des risques. Les performances passées ne préjugent pas des performances futures.
           </p>
-          <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-            AlphaBrief © {new Date().getFullYear()}
-          </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+              AlphaBrief © {new Date().getFullYear()}
+            </p>
+            <Link
+              href="/admin/login"
+              style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', textDecoration: 'none', opacity: 0.3, letterSpacing: '0.08em', transition: 'opacity 0.2s' }}
+              onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
+              onMouseLeave={e => (e.currentTarget.style.opacity = '0.3')}
+            >⚙</Link>
+          </div>
         </div>
       </footer>
     </>
