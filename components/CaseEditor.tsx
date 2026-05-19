@@ -107,79 +107,126 @@ function ChartModal({ onInsert, onClose }: { onInsert: (html: string) => void; o
   )
 }
 
-// CKEditor 5 via CDN
-function CKEditorWrapper({ value, onChange }: { value: string; onChange: (html: string) => void }) {
+// Jodit Editor via CDN
+function JoditWrapper({ value, onChange }: { value: string; onChange: (html: string) => void }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const editorRef = useRef<any>(null)
   const [ready, setReady] = useState(false)
   const initialValue = useRef(value)
 
   useEffect(() => {
-    const loadAndInit = () => {
+    const initJodit = () => {
       if (!containerRef.current || editorRef.current) return
-      const CK = (window as any).ClassicEditor
-      if (!CK) return
-      CK.create(containerRef.current, {
-        toolbar: { items: ['heading', '|', 'bold', 'italic', 'underline', 'strikethrough', '|', 'fontColor', 'fontBackgroundColor', 'fontSize', '|', 'alignment', '|', 'bulletedList', 'numberedList', 'outdent', 'indent', '|', 'blockQuote', 'insertTable', 'horizontalLine', '|', 'link', 'mediaEmbed', '|', 'undo', 'redo', '|', 'removeFormat'], shouldNotGroupWhenFull: true },
-        heading: { options: [{ model: 'paragraph', title: 'Paragraphe', class: 'ck-heading_paragraph' }, { model: 'heading1', view: 'h1', title: 'Titre 1', class: 'ck-heading_heading1' }, { model: 'heading2', view: 'h2', title: 'Titre 2', class: 'ck-heading_heading2' }, { model: 'heading3', view: 'h3', title: 'Titre 3', class: 'ck-heading_heading3' }] },
-        table: { contentToolbar: ['tableColumn', 'tableRow', 'mergeTableCells'] },
-        fontSize: { options: [10, 12, 14, 'default', 18, 20, 24, 28] },
-        initialData: initialValue.current,
-      }).then((editor: any) => {
-        editorRef.current = editor
-        setReady(true)
-        editor.model.document.on('change:data', () => onChange(editor.getData()))
-      }).catch((err: any) => console.error('CKEditor:', err))
+      const J = (window as any).Jodit
+      if (!J) return
+
+      const editor = J.make(containerRef.current, {
+        language: 'fr',
+        theme: 'default',
+        height: 560,
+        minHeight: 400,
+        toolbarButtonSize: 'middle',
+        buttons: [
+          'source', '|',
+          'bold', 'italic', 'underline', 'strikethrough', 'eraser', '|',
+          'superscript', 'subscript', '|',
+          'ul', 'ol', '|',
+          'outdent', 'indent', '|',
+          'font', 'fontsize', 'brush', 'paragraph', '|',
+          'image', 'table', 'link', '|',
+          'align', '|',
+          'undo', 'redo', '|',
+          'hr', 'copyformat', 'fullsize', '|',
+          'symbol',
+        ],
+        uploader: { insertImageAsBase64URI: true },
+        showXPathInStatusbar: false,
+        showCharsCounter: false,
+        showWordsCounter: false,
+        toolbarAdaptive: false,
+        style: {
+          background: 'var(--bg-card)',
+          color: 'var(--text-primary)',
+          fontSize: '0.95rem',
+          fontFamily: 'var(--font-body)',
+          lineHeight: '1.8',
+          padding: '20px 24px',
+        },
+      })
+
+      editor.value = initialValue.current
+      editor.events.on('change', () => onChange(editor.value))
+      editorRef.current = editor
+      setReady(true)
     }
 
-    if ((window as any).ClassicEditor) { loadAndInit(); return }
+    if ((window as any).Jodit) { initJodit(); return }
+
     const link = document.createElement('link')
     link.rel = 'stylesheet'
-    link.href = 'https://cdn.ckeditor.com/ckeditor5/41.4.2/classic/ckeditor.css'
+    link.href = 'https://cdnjs.cloudflare.com/ajax/libs/jodit/4.7.6/es2021/jodit.min.css'
     document.head.appendChild(link)
+
     const script = document.createElement('script')
-    script.src = 'https://cdn.ckeditor.com/ckeditor5/41.4.2/classic/ckeditor.js'
-    script.onload = loadAndInit
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jodit/4.7.6/es2021/jodit.min.js'
+    script.onload = initJodit
     document.head.appendChild(script)
 
-    return () => { if (editorRef.current) { editorRef.current.destroy().catch(() => {}); editorRef.current = null } }
+    return () => {
+      if (editorRef.current) {
+        editorRef.current.destruct()
+        editorRef.current = null
+      }
+    }
   }, [])
 
+  // Sync external value changes (e.g. on case load)
   useEffect(() => {
-    if (editorRef.current && ready && value !== editorRef.current.getData()) {
-      editorRef.current.setData(value)
+    if (editorRef.current && ready) {
+      const current = editorRef.current.value
+      if (current !== value && value !== '') {
+        editorRef.current.value = value
+      }
     }
   }, [ready])
 
   return (
     <>
       <style>{`
-        .ck.ck-editor{border-radius:6px!important;border:1px solid var(--border)!important;}
-        .ck.ck-toolbar{background:var(--bg-elevated)!important;border-color:var(--border)!important;border-radius:6px 6px 0 0!important;flex-wrap:wrap!important;padding:4px 8px!important;}
-        .ck.ck-toolbar__separator{background:var(--border)!important;}
-        .ck.ck-button{color:var(--text-secondary)!important;border-radius:4px!important;background:transparent!important;}
-        .ck.ck-button:hover,.ck.ck-button.ck-on{background:var(--accent-dim)!important;color:var(--accent)!important;}
-        .ck.ck-editor__main .ck-editor__editable{background:var(--bg-card)!important;color:var(--text-primary)!important;border-color:var(--border)!important;border-radius:0 0 6px 6px!important;min-height:520px!important;font-family:var(--font-body)!important;font-size:0.95rem!important;line-height:1.8!important;padding:20px 28px!important;}
-        .ck.ck-editor__editable:focus{border-color:var(--accent-border)!important;box-shadow:none!important;}
-        .ck-content h1{font-family:var(--font-display)!important;font-size:1.8rem!important;font-weight:700!important;color:var(--text-primary)!important;margin:24px 0 12px!important;}
-        .ck-content h2{font-family:var(--font-display)!important;font-size:1.35rem!important;font-weight:600!important;color:var(--text-primary)!important;border-bottom:1px solid var(--border)!important;padding-bottom:8px!important;margin:28px 0 12px!important;}
-        .ck-content h3{font-size:1.05rem!important;font-weight:600!important;color:var(--accent)!important;margin:20px 0 8px!important;}
-        .ck-content p{margin-bottom:14px!important;color:#ccc8c0!important;}
-        .ck-content blockquote{border-left:3px solid var(--accent)!important;padding:10px 18px!important;margin:20px 0!important;background:var(--accent-dim)!important;border-radius:0 6px 6px 0!important;color:var(--text-secondary)!important;}
-        .ck-content table{border-collapse:collapse!important;width:100%!important;margin:20px 0!important;}
-        .ck-content td,.ck-content th{border:1px solid var(--border)!important;padding:9px 13px!important;}
-        .ck-content th{background:var(--bg-elevated)!important;color:var(--text-secondary)!important;font-family:var(--font-mono)!important;font-size:0.75rem!important;}
-        .ck-content a{color:var(--accent)!important;}
-        .ck.ck-dropdown__panel,.ck.ck-list,.ck.ck-balloon-panel{background:var(--bg-elevated)!important;border-color:var(--border)!important;}
-        .ck.ck-list__item .ck-button{color:var(--text-primary)!important;}
-        .ck.ck-list__item .ck-button:hover{background:var(--accent-dim)!important;}
-        .ck.ck-input{background:var(--bg-card)!important;color:var(--text-primary)!important;border-color:var(--border)!important;}
+        .jodit-container { border: 1px solid var(--border) !important; border-radius: 6px !important; }
+        .jodit-toolbar__box { background: var(--bg-elevated) !important; border-bottom: 1px solid var(--border) !important; border-radius: 6px 6px 0 0 !important; }
+        .jodit-toolbar-button__button { color: var(--text-secondary) !important; }
+        .jodit-toolbar-button__button:hover { background: var(--accent-dim) !important; color: var(--accent) !important; }
+        .jodit-toolbar-button_active .jodit-toolbar-button__button { background: var(--accent-dim) !important; color: var(--accent) !important; }
+        .jodit-workplace { background: var(--bg-card) !important; }
+        .jodit-wysiwyg { color: var(--text-primary) !important; font-family: var(--font-body) !important; font-size: 0.95rem !important; line-height: 1.8 !important; padding: 20px 24px !important; }
+        .jodit-wysiwyg h1 { font-family: var(--font-display) !important; font-size: 1.8rem !important; font-weight: 700 !important; color: var(--text-primary) !important; margin: 24px 0 12px !important; }
+        .jodit-wysiwyg h2 { font-family: var(--font-display) !important; font-size: 1.35rem !important; font-weight: 600 !important; color: var(--text-primary) !important; border-bottom: 1px solid var(--border) !important; padding-bottom: 8px !important; margin: 28px 0 12px !important; }
+        .jodit-wysiwyg h3 { font-size: 1.05rem !important; font-weight: 600 !important; color: var(--accent) !important; margin: 20px 0 8px !important; }
+        .jodit-wysiwyg p { color: #ccc8c0 !important; margin-bottom: 14px !important; }
+        .jodit-wysiwyg blockquote { border-left: 3px solid var(--accent) !important; padding: 10px 18px !important; margin: 20px 0 !important; background: var(--accent-dim) !important; border-radius: 0 6px 6px 0 !important; }
+        .jodit-wysiwyg table { border-collapse: collapse !important; width: 100% !important; }
+        .jodit-wysiwyg td, .jodit-wysiwyg th { border: 1px solid var(--border) !important; padding: 9px 13px !important; }
+        .jodit-wysiwyg th { background: var(--bg-elevated) !important; color: var(--text-secondary) !important; }
+        .jodit-wysiwyg a { color: var(--accent) !important; }
+        .jodit-status-bar { background: var(--bg-elevated) !important; border-top: 1px solid var(--border) !important; }
+        .jodit-popup__content { background: var(--bg-elevated) !important; border-color: var(--border) !important; }
+        .jodit-ui-input__input { background: var(--bg-card) !important; color: var(--text-primary) !important; border-color: var(--border) !important; }
+        .jodit-dialog__panel { background: var(--bg-elevated) !important; }
+        .jodit-dialog__header { background: var(--bg-card) !important; border-bottom: 1px solid var(--border) !important; color: var(--text-primary) !important; }
+        .jodit-dialog__content { background: var(--bg-elevated) !important; color: var(--text-primary) !important; }
+        .jodit-source__mirror { background: var(--bg-card) !important; color: var(--accent) !important; font-family: var(--font-mono) !important; }
       `}</style>
       <div ref={containerRef} />
-      {!ready && <div style={{ minHeight: 520, background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><p style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }}>Chargement de l'éditeur…</p></div>}
+      {!ready && (
+        <div style={{ minHeight: 520, background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <p style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }}>Chargement de l'éditeur…</p>
+        </div>
+      )}
     </>
   )
 }
+
 
 // Company row
 interface CompanyEntry { company_id: string; rating: Rating | ''; target_price: string; upside: string }
@@ -323,7 +370,7 @@ export default function CaseEditor({ caseId }: Props) {
                 <label className="form-label" style={{ marginBottom: 0 }}>Contenu de l'analyse</label>
                 <button type="button" onClick={() => setShowChart(true)} className="btn btn-ghost" style={{ padding: '4px 12px', fontSize: '0.72rem' }}>📈 Insérer un graphique</button>
               </div>
-              <CKEditorWrapper value={html} onChange={setHtml} />
+              <JoditWrapper value={html} onChange={setHtml} />
             </div>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
