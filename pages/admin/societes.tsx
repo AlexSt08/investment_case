@@ -9,8 +9,6 @@ export default function AdminSocietes() {
   const [companies, setCompanies] = useState<Company[]>([])
   const [sectors, setSectors] = useState<Sector[]>([])
   const [loading, setLoading] = useState(true)
-
-  // New company form
   const [ticker, setTicker] = useState('')
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
@@ -18,10 +16,7 @@ export default function AdminSocietes() {
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
 
-  useEffect(() => {
-    checkAuth()
-    loadData()
-  }, [])
+  useEffect(() => { checkAuth(); loadData() }, [])
 
   const checkAuth = async () => {
     const { data } = await supabase.auth.getUser()
@@ -51,6 +46,7 @@ export default function AdminSocietes() {
     if (error) {
       setMsg('Erreur : ' + (error.message.includes('unique') ? 'ce ticker existe déjà.' : error.message))
     } else {
+      setTicker(''); setName(''); setDescription(''); setSectorId('')
       setMsg('✓ Société ajoutée.')
       loadData()
     }
@@ -59,7 +55,7 @@ export default function AdminSocietes() {
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Supprimer cette société ? Les analyses liées ne seront pas supprimées.')) return
+    if (!confirm('Supprimer cette société ?')) return
     await supabase.from('companies').delete().eq('id', id)
     loadData()
   }
@@ -81,7 +77,7 @@ export default function AdminSocietes() {
           <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, padding: 28, marginBottom: 40 }}>
             <p className="section-label" style={{ marginBottom: 20 }}>Ajouter une société</p>
             <form onSubmit={handleAdd}>
-              <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr 140px', gap: 12, marginBottom: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: 12, marginBottom: 12 }}>
                 <div className="form-group" style={{ marginBottom: 0 }}>
                   <label className="form-label">Ticker *</label>
                   <input
@@ -97,12 +93,7 @@ export default function AdminSocietes() {
                   <label className="form-label">Nom *</label>
                   <input className="form-input" value={name} onChange={e => setName(e.target.value)} placeholder="NVIDIA Corporation" required />
                 </div>
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label">Bourse</label>
-                  </select>
-                </div>
               </div>
-
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 200px', gap: 12, marginBottom: 16 }}>
                 <div className="form-group" style={{ marginBottom: 0 }}>
                   <label className="form-label">Description courte</label>
@@ -116,7 +107,6 @@ export default function AdminSocietes() {
                   </select>
                 </div>
               </div>
-
               <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
                 <button type="submit" className="btn btn-primary" disabled={saving} style={{ padding: '8px 20px' }}>
                   {saving ? '…' : '+ Ajouter'}
@@ -136,7 +126,7 @@ export default function AdminSocietes() {
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                    {['Ticker', 'Société', 'Bourse', 'Secteur', ''].map(h => (
+                    {['Ticker', 'Société', 'Secteur', ''].map(h => (
                       <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontFamily: 'var(--font-mono)', fontSize: '0.65rem', letterSpacing: '0.1em', color: 'var(--text-muted)', fontWeight: 500 }}>
                         {h.toUpperCase()}
                       </th>
