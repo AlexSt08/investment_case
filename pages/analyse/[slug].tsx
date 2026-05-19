@@ -4,12 +4,10 @@ import Link from 'next/link'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import Nav from '../../components/Nav'
-import { getPublishedCases, getCaseBySlug, type InvestmentCase } from '../../lib/supabase'
+import { getPublishedCases, getCaseBySlug, type InvestmentCase, type CaseCompany } from '../../lib/supabase'
 
 interface Props {
   case_: InvestmentCase
-  relatedCases: InvestmentCase[]
-  htmlContent: string
 }
 
 const RATING_LABEL: Record<string, string> = {
@@ -19,9 +17,19 @@ const RATING_LABEL: Record<string, string> = {
   WATCH: 'Surveiller',
 }
 
-export default function AnalysePage({ case_, htmlContent }: Props) {
-  const company = case_.companies
-  const sector = case_.sectors || case_.companies?.sectors
+const RATING_ARROW: Record<string, string> = {
+  BUY: '▲',
+  HOLD: '◆',
+  SELL: '▼',
+  WATCH: '◉',
+}
+
+export default function AnalysePage({ case_ }: Props) {
+  const sector = case_.sectors
+  const caseCompanies = case_.case_companies ?? []
+
+  // Determine primary display info from case_companies or legacy fields
+  const hasCompanies = caseCompanies.length > 0
 
   return (
     <>
@@ -33,11 +41,12 @@ export default function AnalysePage({ case_, htmlContent }: Props) {
       <Nav />
 
       <article>
-        {/* Article header */}
-        <header style={{ padding: '60px 0 40px', borderBottom: '1px solid var(--border)' }}>
-          <div className="container" style={{ maxWidth: 860 }}>
+        {/* ── Header ── */}
+        <header style={{ padding: '56px 0 40px', borderBottom: '1px solid var(--border)' }}>
+          <div className="container" style={{ maxWidth: 900 }}>
+
             {/* Breadcrumb */}
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 28, fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 28, fontSize: '0.75rem', color: 'var(--text-muted)', flexWrap: 'wrap' }}>
               <Link href="/" style={{ color: 'var(--text-muted)', textDecoration: 'none' }}>Accueil</Link>
               <span>›</span>
               <Link href="/analyses" style={{ color: 'var(--text-muted)', textDecoration: 'none' }}>Analyses</Link>
@@ -49,24 +58,23 @@ export default function AnalysePage({ case_, htmlContent }: Props) {
                   </Link>
                 </>
               )}
-              {company && (
-                <>
+              {caseCompanies.slice(0, 2).map(cc => cc.companies && (
+                <span key={cc.id} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                   <span>›</span>
-                  <Link href={`/ticker/${company.ticker}`} className="badge-ticker" style={{ fontSize: '0.7rem' }}>
-                    {company.ticker}
+                  <Link href={`/ticker/${cc.companies.ticker}`} className="badge-ticker" style={{ fontSize: '0.68rem' }}>
+                    {cc.companies.ticker}
                   </Link>
-                </>
-              )}
+                </span>
+              ))}
             </div>
 
             {/* Title */}
             <h1 style={{
               fontFamily: 'var(--font-display)',
-              fontSize: 'clamp(1.6rem, 4vw, 2.5rem)',
+              fontSize: 'clamp(1.6rem, 4vw, 2.6rem)',
               fontWeight: 700,
               lineHeight: 1.2,
-              marginBottom: 16,
-              color: 'var(--text-primary)',
+              marginBottom: 14,
             }}>
               {case_.title}
             </h1>
@@ -77,49 +85,101 @@ export default function AnalysePage({ case_, htmlContent }: Props) {
               </p>
             )}
 
+            {/* ── Companies ratings table ── */}
+            {hasCompanies && (
+              <div style={{
+                display: 'flex',
+                gap: 12,
+                flexWrap: 'wrap',
+                marginBottom: 28,
+              }}>
+                {caseCompanies.map(cc => {
+                  const comp = cc.companies
+                  if (!comp) return null
+                  return (
+                    <Link
+                      key={cc.id}
+                      href={`/ticker/${comp.ticker}`}
+                      style={{
+                        textDecoration: 'none',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 10,
+                        padding: '10px 16px',
+                        background: 'var(--bg-elevated)',
+                        border: '1px solid var(--border)',
+                        borderRadius: 8,
+                        transition: 'border-color 0.2s',
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--accent-border)'}
+                      onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
+                    >
+                      <span className="badge-ticker" style={{ fontSize: '0.8rem' }}>{comp.ticker}</span>
+                      {cc.rating && (
+                        <span className={`badge-rating ${cc.rating}`} style={{ fontSize: '0.7rem' }}>
+                          {RATING_ARROW[cc.rating]} {RATING_LABEL[cc.rating]}
+                        </span>
+                      )}
+                      {cc.target_price && (
+                        <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
+                          Obj. {cc.target_price}
+                        </span>
+                      )}
+                      {cc.upside && (
+                        <span style={{
+                          fontSize: '0.75rem',
+                          fontFamily: 'var(--font-mono)',
+                          color: cc.upside.startsWith('+') ? 'var(--buy)' : cc.upside.startsWith('-') ? 'var(--sell)' : 'var(--text-muted)',
+                          fontWeight: 600,
+                        }}>
+                          {cc.upside}
+                        </span>
+                      )}
+                    </Link>
+                  )
+                })}
+              </div>
+            )}
+
             {/* Meta strip */}
             <div style={{
               display: 'flex',
-              gap: 24,
+              gap: 28,
               alignItems: 'center',
               paddingTop: 20,
               borderTop: '1px solid var(--border)',
               flexWrap: 'wrap',
             }}>
-              {case_.rating && (
+              {/* Global rating (shown only if no company-level ratings) */}
+              {!hasCompanies && case_.rating && (
                 <div>
-                  <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', display: 'block', marginBottom: 4, letterSpacing: '0.1em' }}>
-                    RECOMMANDATION
-                  </span>
+                  <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', display: 'block', marginBottom: 4, letterSpacing: '0.1em' }}>RECOMMANDATION</span>
                   <span className={`badge-rating ${case_.rating}`} style={{ fontSize: '0.8rem', padding: '5px 14px' }}>
-                    {RATING_LABEL[case_.rating] ?? case_.rating}
+                    {RATING_ARROW[case_.rating]} {RATING_LABEL[case_.rating]}
                   </span>
                 </div>
               )}
+
               {case_.target_horizon && (
                 <div>
-                  <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', display: 'block', marginBottom: 4, letterSpacing: '0.1em' }}>
-                    HORIZON
-                  </span>
+                  <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', display: 'block', marginBottom: 4, letterSpacing: '0.1em' }}>HORIZON</span>
                   <span style={{ fontSize: '0.85rem', color: 'var(--text-primary)' }}>{case_.target_horizon}</span>
                 </div>
               )}
-              {company && (
+
+              {sector && (
                 <div>
-                  <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', display: 'block', marginBottom: 4, letterSpacing: '0.1em' }}>
-                    TICKER
-                  </span>
-                  <Link href={`/ticker/${company.ticker}`} className="badge-ticker">
-                    {company.ticker} · {company.exchange}
+                  <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', display: 'block', marginBottom: 4, letterSpacing: '0.1em' }}>SECTEUR</span>
+                  <Link href={`/secteur/${sector.slug}`} style={{ fontSize: '0.85rem', color: sector.color, textDecoration: 'none' }}>
+                    {sector.name}
                   </Link>
                 </div>
               )}
+
               {case_.published_at && (
                 <div style={{ marginLeft: 'auto' }}>
-                  <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', display: 'block', marginBottom: 4, letterSpacing: '0.1em' }}>
-                    PUBLIÉ LE
-                  </span>
-                  <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
+                  <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', display: 'block', marginBottom: 4, letterSpacing: '0.1em' }}>PUBLIÉ LE</span>
+                  <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
                     {format(new Date(case_.published_at), 'd MMMM yyyy', { locale: fr })}
                   </span>
                 </div>
@@ -128,43 +188,46 @@ export default function AnalysePage({ case_, htmlContent }: Props) {
           </div>
         </header>
 
-        {/* Content */}
-        <div className="container" style={{ maxWidth: 860, padding: '48px 24px 80px' }}>
+        {/* ── Content ── */}
+        <div className="container" style={{ maxWidth: 900, padding: '48px 24px 80px' }}>
+
+          {/* Render HTML directly */}
           <div
             className="prose"
-            dangerouslySetInnerHTML={{ __html: htmlContent }}
+            dangerouslySetInnerHTML={{ __html: case_.content || '' }}
           />
 
           {/* Tags */}
           {case_.tags && case_.tags.length > 0 && (
             <div style={{ marginTop: 48, paddingTop: 24, borderTop: '1px solid var(--border)' }}>
-              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', letterSpacing: '0.1em', marginRight: 12 }}>
-                THÈMES
-              </span>
+              <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', letterSpacing: '0.1em', marginRight: 12 }}>THÈMES</span>
               {case_.tags.map(tag => (
-                <Link
-                  key={tag.id}
-                  href={`/tag/${tag.slug}`}
-                  style={{
-                    display: 'inline-block',
-                    marginRight: 8,
-                    marginBottom: 8,
-                    padding: '4px 12px',
-                    borderRadius: 20,
-                    background: 'var(--bg-elevated)',
-                    border: '1px solid var(--border)',
-                    fontSize: '0.78rem',
-                    color: 'var(--text-secondary)',
-                    textDecoration: 'none',
-                  }}
-                >
+                <Link key={tag.id} href={`/tag/${tag.slug}`} style={{
+                  display: 'inline-block', marginRight: 8, marginBottom: 8,
+                  padding: '4px 12px', borderRadius: 20,
+                  background: 'var(--bg-elevated)', border: '1px solid var(--border)',
+                  fontSize: '0.78rem', color: 'var(--text-secondary)', textDecoration: 'none',
+                }}>
                   {tag.name}
                 </Link>
               ))}
             </div>
           )}
 
-          {/* Back */}
+          {/* Related tickers */}
+          {hasCompanies && (
+            <div style={{ marginTop: 48, paddingTop: 24, borderTop: '1px solid var(--border)' }}>
+              <p style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', letterSpacing: '0.1em', marginBottom: 12 }}>SOCIÉTÉS MENTIONNÉES</p>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {caseCompanies.map(cc => cc.companies && (
+                  <Link key={cc.id} href={`/ticker/${cc.companies.ticker}`} className="badge-ticker">
+                    {cc.companies.ticker}
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div style={{ marginTop: 48 }}>
             <Link href="/analyses" style={{ color: 'var(--accent)', textDecoration: 'none', fontSize: '0.85rem' }}>
               ← Toutes les analyses
@@ -185,40 +248,6 @@ export default function AnalysePage({ case_, htmlContent }: Props) {
   )
 }
 
-function tiptapToHtml(doc: any): string {
-  if (!doc?.content) return ''
-  return doc.content.map((node: any) => nodeToHtml(node)).join('')
-}
-
-function nodeToHtml(node: any): string {
-  const inner = () => node.content?.map((n: any) => nodeToHtml(n)).join('') ?? ''
-  const marks = (text: string, marks: any[] = []) =>
-    marks.reduce((t, m) => {
-      if (m.type === 'bold') return `<strong>${t}</strong>`
-      if (m.type === 'italic') return `<em>${t}</em>`
-      if (m.type === 'highlight') return `<mark>${t}</mark>`
-      if (m.type === 'link') return `<a href="${m.attrs?.href}">${t}</a>`
-      return t
-    }, text)
-
-  switch (node.type) {
-    case 'text': return marks(node.text ?? '', node.marks)
-    case 'paragraph': return `<p>${inner()}</p>`
-    case 'heading': return `<h${node.attrs?.level ?? 2}>${inner()}</h${node.attrs?.level ?? 2}>`
-    case 'bulletList': return `<ul>${inner()}</ul>`
-    case 'orderedList': return `<ol>${inner()}</ol>`
-    case 'listItem': return `<li>${inner()}</li>`
-    case 'blockquote': return `<blockquote>${inner()}</blockquote>`
-    case 'horizontalRule': return `<hr>`
-    case 'hardBreak': return `<br>`
-    case 'table': return `<table>${inner()}</table>`
-    case 'tableRow': return `<tr>${inner()}</tr>`
-    case 'tableHeader': return `<th>${inner()}</th>`
-    case 'tableCell': return `<td>${inner()}</td>`
-    default: return inner()
-  }
-}
-
 export const getStaticPaths: GetStaticPaths = async () => {
   const cases = await getPublishedCases()
   return {
@@ -231,15 +260,5 @@ export const getStaticProps: GetStaticProps = async ({ params }) => {
   const slug = params?.slug as string
   const case_ = await getCaseBySlug(slug)
   if (!case_) return { notFound: true }
-
-  // Serialize TipTap JSON to basic HTML
-  let htmlContent = ''
-  try {
-    const content = case_.content as any
-    htmlContent = tiptapToHtml(content)
-  } catch {
-    htmlContent = '<p>Contenu non disponible.</p>'
-  }
-
-  return { props: { case_, htmlContent }, revalidate: 60 }
+  return { props: { case_ }, revalidate: 60 }
 }
