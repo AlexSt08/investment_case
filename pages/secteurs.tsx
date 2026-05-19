@@ -103,7 +103,7 @@ export const getStaticProps: GetStaticProps = async () => {
     const sectorsWithCount: SectorWithCount[] = sectors.map(s => ({
       ...s,
       count: cases.filter(c =>
-        c.sector_id === s.id || c.companies?.sector_id === s.id
+        c.sector_id === s.id
       ).length,
     }))
     return { props: { sectors: sectorsWithCount }, revalidate: 300 }

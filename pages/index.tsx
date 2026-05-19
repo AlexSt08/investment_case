@@ -63,20 +63,12 @@ export default function Home({ cases, sectors }: Props) {
                 SECTEURS
               </span>
               {sectors.map(s => (
-                <Link
-                  key={s.id}
-                  href={`/secteur/${s.slug}`}
-                  style={{
-                    fontSize: '0.8rem',
-                    color: s.color,
-                    textDecoration: 'none',
-                    padding: '4px 12px',
-                    borderRadius: 20,
-                    border: `1px solid ${s.color}30`,
-                    background: `${s.color}10`,
-                    transition: 'background 0.2s',
-                  }}
-                >
+                <Link key={s.id} href={`/secteur/${s.slug}`} style={{
+                  fontSize: '0.8rem', color: s.color, textDecoration: 'none',
+                  padding: '4px 12px', borderRadius: 20,
+                  border: `1px solid ${s.color}30`, background: `${s.color}10`,
+                  transition: 'background 0.2s',
+                }}>
                   {s.name}
                 </Link>
               ))}
@@ -85,41 +77,58 @@ export default function Home({ cases, sectors }: Props) {
         </section>
 
         <div className="container" style={{ padding: '60px 24px' }}>
+
           {/* Featured */}
           {featured && (
             <div style={{ marginBottom: 64 }}>
               <p className="section-label">Analyse à la une</p>
               <Link href={`/analyse/${featured.slug}`} style={{ textDecoration: 'none' }}>
-                <div style={{
-                  background: 'var(--bg-card)',
-                  border: '1px solid var(--border)',
-                  borderRadius: 10,
-                  padding: '40px',
-                  transition: 'border-color 0.2s',
-                  cursor: 'pointer',
-                }}
+                <div
+                  style={{
+                    background: 'var(--bg-card)', border: '1px solid var(--border)',
+                    borderRadius: 10, padding: '40px', cursor: 'pointer', transition: 'border-color 0.2s',
+                  }}
                   onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--accent-border)')}
                   onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border)')}
                 >
-                  <div style={{ display: 'flex', gap: 12, marginBottom: 20, alignItems: 'center', flexWrap: 'wrap' }}>
-                    {featured.companies && <span className="badge-ticker">{featured.companies.ticker}</span>}
-                    {featured.rating && <span className={`badge-rating ${featured.rating}`}>{featured.rating}</span>}
+                  <div style={{ display: 'flex', gap: 10, marginBottom: 20, alignItems: 'center', flexWrap: 'wrap' }}>
+                    {(featured.case_companies ?? []).slice(0, 3).map(cc => cc.companies && (
+                      <span key={cc.id} className="badge-ticker">{cc.companies.ticker}</span>
+                    ))}
+                    {featured.rating && (
+                      <span className={`badge-rating ${featured.rating}`}>{featured.rating}</span>
+                    )}
+                    {!(featured.case_companies ?? []).some(cc => cc.rating) && featured.rating && null}
                     {featured.sectors && (
                       <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
                         {featured.sectors.name}
                       </span>
                     )}
                   </div>
+
                   <h2 style={{
                     fontFamily: 'var(--font-display)',
                     fontSize: 'clamp(1.4rem, 3vw, 2rem)',
-                    fontWeight: 700,
-                    lineHeight: 1.25,
-                    marginBottom: 16,
+                    fontWeight: 700, lineHeight: 1.25, marginBottom: 16,
                     color: 'var(--text-primary)',
                   }}>
                     {featured.title}
                   </h2>
+
+                  {/* Company ratings strip */}
+                  {(featured.case_companies ?? []).length > 0 && (
+                    <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+                      {(featured.case_companies ?? []).map(cc => cc.rating && cc.companies && (
+                        <span key={cc.id} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span className="badge-ticker" style={{ fontSize: '0.72rem' }}>{cc.companies.ticker}</span>
+                          <span className={`badge-rating ${cc.rating}`} style={{ fontSize: '0.68rem' }}>{cc.rating}</span>
+                          {cc.target_price && <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{cc.target_price}</span>}
+                          {cc.upside && <span style={{ fontSize: '0.72rem', fontFamily: 'var(--font-mono)', color: cc.upside.startsWith('+') ? 'var(--buy)' : 'var(--sell)' }}>{cc.upside}</span>}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
                   {featured.excerpt && (
                     <p style={{ color: 'var(--text-secondary)', lineHeight: 1.7, maxWidth: 680, fontSize: '0.95rem' }}>
                       {featured.excerpt}
@@ -130,7 +139,7 @@ export default function Home({ cases, sectors }: Props) {
             </div>
           )}
 
-          {/* Recent cases */}
+          {/* Recent */}
           {recent.length > 0 && (
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 28 }}>
@@ -140,9 +149,7 @@ export default function Home({ cases, sectors }: Props) {
                 </Link>
               </div>
               <div className="grid-cases">
-                {recent.map((c, i) => (
-                  <CaseCard key={c.id} case_={c} delay={i + 1} />
-                ))}
+                {recent.map((c, i) => <CaseCard key={c.id} case_={c} delay={i + 1} />)}
               </div>
             </div>
           )}
