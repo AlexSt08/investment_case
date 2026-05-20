@@ -10,19 +10,22 @@ const NAV_LINKS = [
 
 export default function Nav() {
   const router = useRouter()
-
   return (
     <nav>
       <div className="nav-inner">
         <Link href="/" className="nav-logo">
-          Alpha<span>•</span>Brief
+          Alpha<span>Brief</span>
         </Link>
         <ul className="nav-links">
           {NAV_LINKS.map(({ href, label }) => (
             <li key={href}>
               <Link
                 href={href}
-                className={router.pathname === href || router.pathname.startsWith(href + '/') && href !== '/' ? 'active' : ''}
+                className={
+                  router.pathname === href ||
+                  (router.pathname.startsWith(href + '/') && href !== '/')
+                    ? 'active' : ''
+                }
               >
                 {label}
               </Link>
