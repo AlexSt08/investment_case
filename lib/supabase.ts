@@ -68,7 +68,7 @@ export async function getPublishedCases(): Promise<InvestmentCase[]> {
   const { data, error } = await supabase
     .from('investment_cases')
     .select(`
-      *,
+      id, slug, title, subtitle, sector_id, excerpt, rating, target_horizon, published, published_at, created_at, updated_at,
       sectors(id, slug, name, color),
       investment_case_tags(tags(id, slug, name)),
       investment_case_companies(

@@ -1,6 +1,7 @@
 import type { GetStaticPaths, GetStaticProps } from 'next'
 import Head from 'next/head'
 import Link from 'next/link'
+import { useRouter } from 'next/router'
 import Nav from '../../components/Nav'
 import CaseCard from '../../components/CaseCard'
 import { getAllCompanies, getCasesByTicker, type Company, type InvestmentCase } from '../../lib/supabase'
@@ -11,6 +12,12 @@ interface Props {
 }
 
 export default function TickerPage({ company, cases }: Props) {
+  const router = useRouter()
+  if (router.isFallback || !company) return (
+    <div style={{ minHeight: '100vh', background: 'var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <p style={{ fontFamily: 'var(--font-sans)', color: 'var(--text-muted)', fontSize: '0.8rem', letterSpacing: '0.1em' }}>CHARGEMENT…</p>
+    </div>
+  )
   const sector = company.sectors
 
   return (
