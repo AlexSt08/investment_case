@@ -15,7 +15,7 @@ export default function SectorPage({ sector, cases, allSectors }: Props) {
   return (
     <>
       <Head>
-        <title>{sector.name} — AlphaBrief</title>
+        <title>{sector.name} — αAlex</title>
         <meta name="description" content={sector.description} />
       </Head>
       <Nav />
@@ -84,7 +84,7 @@ export const getStaticPaths: GetStaticPaths = async () => {
   const sectors = await getAllSectors()
   return {
     paths: sectors.map(s => ({ params: { slug: s.slug } })),
-    fallback: 'blocking',
+    fallback: true,
   }
 }
 

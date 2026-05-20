@@ -102,7 +102,7 @@ export const getStaticPaths: GetStaticPaths = async () => {
   const companies = await getAllCompanies()
   return {
     paths: companies.map(c => ({ params: { ticker: c.ticker } })),
-    fallback: 'blocking',
+    fallback: true,
   }
 }
 

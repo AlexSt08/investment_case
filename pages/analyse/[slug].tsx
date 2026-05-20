@@ -84,7 +84,7 @@ export const getStaticPaths: GetStaticPaths = async () => {
   const sectors = await getAllSectors()
   return {
     paths: sectors.map(s => ({ params: { slug: s.slug } })),
-    fallback: 'blocking',
+    fallback: true,
   }
 }
 
