@@ -27,7 +27,7 @@ export default function Tickers({ companies, sectors }: Props) {
   return (
     <>
       <Head>
-        <title>Tickers — AlphaBrief</title>
+        <title>Tickers — αAlex</title>
         <meta name="description" content="Index des sociétés et tickers couverts." />
       </Head>
       <Nav />

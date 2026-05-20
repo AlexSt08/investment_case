@@ -48,7 +48,7 @@ export default function Analyses({ cases, sectors, tags }: Props) {
   return (
     <>
       <Head>
-        <title>Analyses — AlphaBrief</title>
+        <title>Analyses — αAlex</title>
         <meta name="description" content="Toutes les analyses et cas d'investissement actions américaines." />
       </Head>
       <Nav />

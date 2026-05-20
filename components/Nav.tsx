@@ -14,7 +14,7 @@ export default function Nav() {
     <nav>
       <div className="nav-inner">
         <Link href="/" className="nav-logo">
-          Alpha<span>Brief</span>
+          α<span>Alex</span>
         </Link>
         <ul className="nav-links">
           {NAV_LINKS.map(({ href, label }) => (

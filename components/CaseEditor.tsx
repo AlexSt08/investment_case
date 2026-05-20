@@ -350,7 +350,7 @@ export default function CaseEditor({ caseId }: Props) {
 
   return (
     <>
-      <Head><title>{isEdit ? 'Éditer' : 'Nouvelle analyse'} — Admin AlphaBrief</title></Head>
+      <Head><title>{isEdit ? 'Éditer' : 'Nouvelle analyse'} — Admin αAlex</title></Head>
       {showChart && <ChartModal onInsert={h => setHtml(prev => prev + h)} onClose={() => setShowChart(false)} />}
       <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
         <nav style={{ borderBottom: '1px solid var(--border)', background: 'var(--bg-card)', position: 'sticky', top: 0, zIndex: 50 }}>

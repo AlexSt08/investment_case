@@ -16,7 +16,7 @@ export default function Secteurs({ sectors }: Props) {
   return (
     <>
       <Head>
-        <title>Secteurs — AlphaBrief</title>
+        <title>Secteurs — αAlex</title>
         <meta name="description" content="Analyses par secteur et industrie." />
       </Head>
       <Nav />

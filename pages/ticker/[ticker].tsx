@@ -16,7 +16,7 @@ export default function TickerPage({ company, cases }: Props) {
   return (
     <>
       <Head>
-        <title>{company.ticker} · {company.name} — AlphaBrief</title>
+        <title>{company.ticker} · {company.name} — αAlex</title>
         <meta name="description" content={`Toutes les analyses publiées sur ${company.name} (${company.ticker})`} />
       </Head>
       <Nav />

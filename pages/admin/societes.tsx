@@ -62,7 +62,7 @@ export default function AdminSocietes() {
 
   return (
     <>
-      <Head><title>Sociétés — Admin AlphaBrief</title></Head>
+      <Head><title>Sociétés — Admin αAlex</title></Head>
       <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
         <nav style={{ borderBottom: '1px solid var(--border)', background: 'var(--bg-card)' }}>
           <div style={{ maxWidth: 1000, margin: '0 auto', padding: '0 24px', height: 56, display: 'flex', alignItems: 'center', gap: 16 }}>

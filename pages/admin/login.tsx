@@ -26,7 +26,7 @@ export default function AdminLogin() {
 
   return (
     <>
-      <Head><title>Admin — AlphaBrief</title></Head>
+      <Head><title>Admin — αAlex</title></Head>
       <div style={{
         minHeight: '100vh',
         display: 'flex',
@@ -44,7 +44,7 @@ export default function AdminLogin() {
         }}>
           <div style={{ textAlign: 'center', marginBottom: 36 }}>
             <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.6rem', fontWeight: 700, marginBottom: 6 }}>
-              Alpha<span style={{ color: 'var(--accent)' }}>•</span>Brief
+              α<span style={{ color: 'var(--ft-red)' }}>Alex</span>
             </h1>
             <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', letterSpacing: '0.1em' }}>
               INTERFACE ADMIN
