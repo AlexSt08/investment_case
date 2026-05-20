@@ -27,7 +27,6 @@ export default function Home({ cases, sectors }: Props) {
       <Nav />
 
       {/* Masthead date + sectors bar */}
-      <div style={{ background: var(--ft-slate) } as any} />
       <div style={{ background: '#262a33', borderBottom: '1px solid rgba(255,255,255,0.1)', padding: '8px 0' }}>
         <div className="container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
           <span style={{ fontFamily: 'var(--font-sans)', fontSize: '0.7rem', color: 'rgba(255,255,255,0.5)', letterSpacing: '0.06em' }}>
