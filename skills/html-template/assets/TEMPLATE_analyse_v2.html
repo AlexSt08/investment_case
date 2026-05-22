@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{TITRE}} — {{SOUS_TITRE}}</title>
+<!--
+╔══════════════════════════════════════════════════════════════╗
+║           TEMPLATE ANALYSE — investment-case v2              ║
+╠══════════════════════════════════════════════════════════════╣
+║  VARIABLES À REMPLACER :                                     ║
+║  {{TITRE}}          Titre principal  (ex: NVIDIA)            ║
+║  {{SOUS_TITRE}}     Accroche courte  (ex: Q1 FY2027...)      ║
+║  {{IMAGE_URL}}      URL ou base64 de l'image d'en-tête       ║
+║  {{IMAGE_ALT}}      Texte alternatif de l'image              ║
+║  {{LEAD}}           Paragraphe d'introduction (résumé)       ║
+║                                                              ║
+║  COMPOSANTS OPTIONNELS :                                     ║
+║  {{FLASH_ACTU}}     Bloc actualité daté (avant KPI strip)    ║
+║  {{KPI_STRIP}}      Grille KPI 3×N (après flash actu)        ║
+║                                                              ║
+║  STRUCTURE DU CORPS :                                        ║
+║  <h2>                    Titre de section (orange + bordure) ║
+║  <h3>                    Sous-titre de section (navy)        ║
+║  <p>                     Paragraphe standard                 ║
+║  <p class="section-subtitle"> Italique sous un <h2>          ║
+║  <ul><li>                Liste à puces                       ║
+║  <b>                     Mise en gras                        ║
+║  <div class="flash-actu">     Bloc flash actualité           ║
+║  <div class="kpi-strip">      Grille KPI 3 colonnes          ║
+║  <div class="quote-block">    Citation avec bordure          ║
+║  <div class="verdict-box">    Recommandation finale          ║
+║  <!-- ══ -->             Séparateur visuel entre sections     ║
+╚══════════════════════════════════════════════════════════════╝
+-->
+<style>
+  /* ── Variables ─────────────────────────────────────────── */
+  :root {
+    --navy:      #0F4761;
+    --orange:    #BF4E14;
+    --gold:      #C8960A;
+    --cream:     #FAF7F2;
+    --rule:      #E0D8CC;
+    --body-font: Aptos, Arial, sans-serif;
+    --mono-font: 'Courier New', Courier, monospace;
+  }
+
+  /* ── Reset & base ───────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; }
+
+  body {
+    font-family: var(--body-font);
+    font-size: 12pt;
+    color: var(--navy);
+    max-width: 620px;
+    margin: 24px auto;
+    padding: 0 20px;
+    line-height: 1.5;
+  }
+
+  /* ── Image d'en-tête ────────────────────────────────────── */
+  .header-image {
+    width: 100%;
+    height: auto;
+    display: block;
+    margin-bottom: 24px;
+    border-radius: 4px;
+  }
+
+  /* ── Titre & sous-titre ─────────────────────────────────── */
+  .doc-title {
+    font-size: 16pt;
+    font-weight: bold;
+    color: var(--navy);
+    text-align: center;
+    margin: 0 0 2px 0;
+  }
+
+  .doc-subtitle {
+    font-size: 11pt;
+    font-style: italic;
+    color: var(--navy);
+    text-align: center;
+    margin: 0 0 16px 0;
+  }
+
+  /* ── Lead ───────────────────────────────────────────────── */
+  .lead {
+    font-style: italic;
+    text-align: justify;
+    margin-bottom: 16px;
+  }
+
+  /* ── Flash Actualité ────────────────────────────────────── */
+  .flash-actu {
+    background: #FFF8EE;
+    border: 1px solid var(--gold);
+    border-left: 4px solid var(--gold);
+    padding: 10px 12px;
+    margin-bottom: 16px;
+  }
+
+  .flash-label {
+    font-family: var(--mono-font);
+    font-size: 8pt;
+    letter-spacing: 0.12em;
+    color: var(--gold);
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+
+  .flash-actu p {
+    text-align: justify;
+    font-size: 10pt;
+    margin: 0;
+    color: var(--navy);
+    font-style: normal;
+  }
+
+  /* ── KPI Strip — grille fixe 3 colonnes ────────────────── */
+  .kpi-strip {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+    margin: 20px 0;
+  }
+
+  .kpi-cell {
+    background: #ffffff;
+    padding: 12px 14px;
+  }
+
+  .kpi-label {
+    font-family: var(--mono-font);
+    font-size: 7pt;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #5A5A5A;
+    margin-bottom: 4px;
+  }
+
+  .kpi-value {
+    font-size: 14pt;
+    font-weight: bold;
+    color: var(--navy);
+    line-height: 1.2;
+  }
+
+  .kpi-delta {
+    font-family: var(--mono-font);
+    font-size: 7.5pt;
+    color: #2A8A4A;
+    margin-top: 2px;
+  }
+
+  .kpi-delta.neg {
+    color: #C0392B;
+  }
+
+  /* ── Citation ───────────────────────────────────────────── */
+  .quote-block {
+    background: #ffffff;
+    border-left: 4px solid var(--navy);
+    padding: 8px 12px;
+    margin: 12px 0;
+    font-style: italic;
+    font-size: 11pt;
+    color: var(--navy);
+  }
+
+  .quote-block cite {
+    display: block;
+    margin-top: 6px;
+    font-style: normal;
+    font-family: var(--mono-font);
+    font-size: 7.5pt;
+    color: var(--navy);
+    letter-spacing: 0.07em;
+  }
+
+  /* ── Verdict / Recommandation ───────────────────────────── */
+  .verdict-box {
+    background: var(--navy);
+    color: #ffffff;
+    padding: 16px 18px;
+    margin-top: 24px;
+  }
+
+  .verdict-box::before {
+    content: 'RECOMMANDATION';
+    display: block;
+    font-family: var(--mono-font);
+    font-size: 7.5pt;
+    letter-spacing: 0.15em;
+    color: var(--gold);
+    margin-bottom: 8px;
+  }
+
+  .verdict-rating {
+    font-size: 16pt;
+    font-weight: bold;
+    color: var(--gold);
+    line-height: 1.2;
+  }
+
+  .verdict-box p {
+    color: rgba(255, 255, 255, 0.85);
+    text-align: justify;
+    margin-top: 10px;
+    font-style: italic;
+    font-size: 12pt;
+  }
+
+  /* ── Titres de sections ─────────────────────────────────── */
+  h2 {
+    font-size: 13pt;
+    font-weight: bold;
+    color: var(--orange);
+    border-bottom: 2px solid var(--orange);
+    padding-bottom: 4px;
+    margin-top: 28px;
+    margin-bottom: 10px;
+  }
+
+  h3 {
+    font-size: 11pt;
+    font-weight: bold;
+    color: var(--navy);
+    margin-top: 18px;
+    margin-bottom: 6px;
+  }
+
+  /* ── Italique de section (sous un h2) ───────────────────── */
+  .section-subtitle {
+    font-style: italic;
+    color: var(--orange);
+    margin-top: -8px;
+    margin-bottom: 12px;
+  }
+
+  /* ── Corps ──────────────────────────────────────────────── */
+  p {
+    text-align: justify;
+    margin: 0 0 10px 0;
+    font-size: 11pt;
+  }
+
+  b, strong { font-weight: bold; }
+
+  /* ── Listes ─────────────────────────────────────────────── */
+  ul {
+    margin: 8px 0 12px 24px;
+    padding: 0;
+  }
+
+  ul li {
+    margin-bottom: 6px;
+    font-size: 10.5pt;
+    text-align: justify;
+  }
+
+  ul li strong {
+    font-size: 10.5pt;
+    font-weight: bold;
+  }
+
+  /* ── Footer ─────────────────────────────────────────────── */
+  .doc-footer {
+    border-top: 1px solid var(--rule);
+    padding: 12px 0 20px 0;
+    margin-top: 24px;
+    text-align: center;
+  }
+
+  .doc-footer-disclaimer {
+    font-family: var(--mono-font);
+    font-size: 7pt;
+    color: #8A8A8A;
+    letter-spacing: 0.05em;
+    margin-bottom: 4px;
+  }
+
+  .doc-footer-sources {
+    font-family: var(--mono-font);
+    font-size: 7pt;
+    color: #8A8A8A;
+    letter-spacing: 0.05em;
+  }
+
+  /* ── Responsive mobile ──────────────────────────────────── */
+  @media (max-width: 480px) {
+    body {
+      font-size: 11pt;
+      margin: 16px auto;
+      padding: 0 14px;
+    }
+    .doc-title    { font-size: 14pt; }
+    .doc-subtitle { font-size: 10pt; }
+    h2            { font-size: 11pt; }
+    h3            { font-size: 10pt; }
+    .kpi-strip    { grid-template-columns: repeat(2, 1fr); }
+    .kpi-value    { font-size: 12pt; }
+    .verdict-rating { font-size: 14pt; }
+  }
+</style>
+</head>
+<body>
+
+  <!-- ══ EN-TÊTE IMAGE ══════════════════════════════════════ -->
+  <img
+    class="header-image"
+    src="{{IMAGE_URL}}"
+    alt="{{IMAGE_ALT}}"
+  >
+
+  <!-- ══ TITRE ══════════════════════════════════════════════ -->
+  <p class="doc-title">{{TITRE}}</p>
+  <p class="doc-subtitle">{{SOUS_TITRE}}</p>
+
+  <!-- ══ LEAD ═══════════════════════════════════════════════ -->
+  <p class="lead">{{LEAD}}</p>
+
+  <!-- ══ FLASH ACTUALITÉ (optionnel) ═══════════════════════ -->
+  <!--
+  <div class="flash-actu">
+    <div class="flash-label">⚡ Flash Actualité — JJ Mois AAAA</div>
+    <p><b>Titre de l'actualité.</b> Description de la news et de son impact.
+    Renvoi vers la section concernée si nécessaire.</p>
+  </div>
+  -->
+
+  <!-- ══ KPI STRIP 3×N (optionnel) ════════════════════════ -->
+  <!--
+  <div class="kpi-strip">
+    <div class="kpi-cell">
+      <div class="kpi-label">Libellé KPI</div>
+      <div class="kpi-value">$00 Md</div>
+      <div class="kpi-delta">▲ +00% YoY · commentaire</div>
+    </div>
+    <div class="kpi-cell">
+      <div class="kpi-label">Libellé KPI</div>
+      <div class="kpi-value">00%</div>
+      <div class="kpi-delta">stable QoQ</div>
+    </div>
+    <div class="kpi-cell">
+      <div class="kpi-label">Libellé KPI</div>
+      <div class="kpi-value">$00 Md</div>
+      <div class="kpi-delta neg">▼ -00% YoY</div>
+    </div>
+    <!-- Ajouter des cellules par multiples de 3 -->
+  </div>
+  -->
+
+  <!-- ══ SECTION 1 ══════════════════════════════════════════ -->
+  <h2>Titre de section 1</h2>
+
+  <p>Paragraphe de corps. Utilisez <b>le gras</b> pour les passages clés.</p>
+
+  <p>Second paragraphe de la section.</p>
+
+  <!-- ══ SECTION 2 ══════════════════════════════════════════ -->
+  <h2>Titre de section 2</h2>
+  <p class="section-subtitle">Sous-titre italique optionnel</p>
+
+  <p>Paragraphe introductif de la section.</p>
+
+  <h3>Sous-section A</h3>
+
+  <p>Contenu de la sous-section. <b>Passage important en gras.</b></p>
+
+  <ul>
+    <li><b>Premier point clé :</b> description du point.</li>
+    <li><b>Deuxième point clé :</b> description du point.</li>
+    <li><b>Troisième point clé :</b> description du point.</li>
+  </ul>
+
+  <!-- ══ CITATION (optionnel) ══════════════════════════════ -->
+  <!--
+  <div class="quote-block">
+    "Texte de la citation exacte issue de la source."
+    <cite>— Prénom Nom, Titre, Source, Date</cite>
+  </div>
+  -->
+
+  <h3>Sous-section B</h3>
+
+  <p>Contenu de la sous-section B.</p>
+
+  <!-- ══ SECTION 3 ══════════════════════════════════════════ -->
+  <h2>Titre de section 3</h2>
+
+  <h3>Sous-section A</h3>
+
+  <p>Contenu.</p>
+
+  <h3>Sous-section B</h3>
+
+  <p>Contenu.</p>
+
+  <!-- ══ RECOMMANDATION (optionnel) ════════════════════════ -->
+  <!--
+  <div class="verdict-box">
+    <div class="verdict-rating">BUY — Conviction Haute</div>
+    <p>Horizon XX mois. Résumé de la recommandation et des conditions
+    qui la soutiennent. Kill switches si nécessaire.</p>
+  </div>
+  -->
+
+  <!-- ══ FOOTER ══════════════════════════════════════════════ -->
+  <div class="doc-footer">
+    <p class="doc-footer-disclaimer">Ce document est produit à des fins d'analyse et d'information uniquement. Il ne constitue pas un conseil en investissement.</p>
+    <p class="doc-footer-sources">Sources : {{SOURCES}}</p>
+  </div>
+
+</body>
+</html>
