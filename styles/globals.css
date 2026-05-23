@@ -297,7 +297,7 @@ nav .nav-inner { max-width: var(--max-width); }
   color: var(--text-secondary);
 }
 
-.prose li { margin-bottom: 6px; font-weight: 300; }
+.prose li { margin-bottom: 6px; font-weight: 300; text-align: justify; }
 .prose strong { color: var(--text-primary); font-weight: 600; }
 .prose em { font-style: italic; color: var(--text-secondary); }
 
