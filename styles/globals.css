@@ -507,3 +507,236 @@ footer {
   .nav-links { display: none; }
   .footer-inner { flex-direction: column; }
 }
+
+/* ── αAlex HTML Template — classes pour articles ── */
+
+/* Variables αAlex (compatibles avec le thème FT) */
+.prose {
+  --navy:      #0F4761;
+  --orange:    #BF4E14;
+  --gold:      #C8960A;
+  --rule:      #E0D8CC;
+  --body-font: Aptos, Arial, sans-serif;
+  --mono-font: 'Courier New', Courier, monospace;
+}
+
+.prose .doc-title {
+  font-size: 1.6rem;
+  font-weight: bold;
+  color: var(--navy);
+  text-align: center;
+  margin: 0 0 4px 0;
+  font-family: var(--font-display);
+}
+
+.prose .doc-subtitle {
+  font-size: 1rem;
+  font-style: italic;
+  color: #0F4761;
+  text-align: center;
+  margin: 0 0 20px 0;
+  font-family: var(--font-body);
+}
+
+.prose .lead {
+  font-style: italic;
+  text-align: justify;
+  margin-bottom: 20px;
+  color: var(--text-secondary);
+  font-size: 1rem;
+  line-height: 1.7;
+  border-left: 3px solid var(--ft-red);
+  padding-left: 16px;
+}
+
+/* Flash Actualité */
+.prose .flash-actu {
+  background: #FFF8EE;
+  border: 1px solid #C8960A;
+  border-left: 4px solid #C8960A;
+  padding: 12px 16px;
+  margin: 20px 0;
+  border-radius: 2px;
+}
+
+.prose .flash-label {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  color: #C8960A;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+  font-style: normal;
+}
+
+.prose .flash-actu p {
+  text-align: justify;
+  font-size: 0.9rem;
+  margin: 0;
+  color: #0F4761;
+  font-style: normal;
+  font-weight: 400;
+}
+
+/* KPI Strip */
+.prose .kpi-strip {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  background: #E0D8CC;
+  border: 1px solid #E0D8CC;
+  margin: 24px 0;
+}
+
+.prose .kpi-cell {
+  background: #ffffff;
+  padding: 14px 16px;
+}
+
+.prose .kpi-label {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #5A5A5A;
+  margin-bottom: 6px;
+}
+
+.prose .kpi-value {
+  font-size: 1.3rem;
+  font-weight: bold;
+  color: #0F4761;
+  line-height: 1.2;
+  font-family: var(--font-display);
+}
+
+.prose .kpi-delta {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  color: #2A8A4A;
+  margin-top: 4px;
+}
+
+.prose .kpi-delta.neg { color: #C0392B; }
+
+/* Citation */
+.prose .quote-block {
+  background: var(--bg-elevated);
+  border-left: 4px solid #0F4761;
+  padding: 12px 16px;
+  margin: 20px 0;
+  font-style: italic;
+  font-size: 1rem;
+  color: #0F4761;
+  border-radius: 0 4px 4px 0;
+}
+
+.prose .quote-block cite {
+  display: block;
+  margin-top: 8px;
+  font-style: normal;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: #0F4761;
+  letter-spacing: 0.07em;
+}
+
+/* Verdict / Recommandation */
+.prose .verdict-box {
+  background: #0F4761;
+  color: #ffffff;
+  padding: 20px 22px;
+  margin-top: 28px;
+  border-radius: 2px;
+}
+
+.prose .verdict-box::before {
+  content: 'RECOMMANDATION';
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  letter-spacing: 0.15em;
+  color: #C8960A;
+  margin-bottom: 10px;
+}
+
+.prose .verdict-rating {
+  font-size: 1.4rem;
+  font-weight: bold;
+  color: #C8960A;
+  line-height: 1.2;
+  font-family: var(--font-display);
+}
+
+.prose .verdict-box p {
+  color: rgba(255, 255, 255, 0.88);
+  text-align: justify;
+  margin-top: 12px;
+  font-style: italic;
+  font-size: 0.95rem;
+  font-weight: 300;
+}
+
+/* Section subtitle */
+.prose .section-subtitle {
+  font-style: italic;
+  color: #BF4E14;
+  margin-top: -8px;
+  margin-bottom: 14px;
+  font-size: 0.9rem;
+}
+
+/* Doc footer inside article */
+.prose .doc-footer {
+  border-top: 1px solid var(--border-rule);
+  padding: 16px 0 8px;
+  margin-top: 32px;
+  text-align: center;
+}
+
+.prose .doc-footer-disclaimer,
+.prose .doc-footer-sources {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  color: #8A8A8A;
+  letter-spacing: 0.05em;
+  font-style: normal;
+  margin-bottom: 4px;
+}
+
+/* Header image */
+.prose .header-image {
+  width: 100%;
+  height: auto;
+  display: block;
+  margin-bottom: 24px;
+  border-radius: 4px;
+}
+
+/* Override prose h2/h3 for αAlex template style */
+.prose h2 {
+  font-size: 1.15rem;
+  font-weight: bold;
+  color: #BF4E14;
+  border-top: none;
+  border-bottom: 2px solid #BF4E14;
+  padding-top: 0;
+  padding-bottom: 4px;
+  margin-top: 28px;
+  margin-bottom: 10px;
+}
+
+.prose h3 {
+  font-size: 0.95rem;
+  font-weight: bold;
+  color: #0F4761;
+  text-transform: none;
+  letter-spacing: normal;
+  margin-top: 18px;
+  margin-bottom: 8px;
+}
+
+@media (max-width: 600px) {
+  .prose .kpi-strip { grid-template-columns: repeat(2, 1fr); }
+  .prose .kpi-value { font-size: 1.1rem; }
+}
