@@ -259,7 +259,19 @@ export const getStaticProps: GetStaticProps = async ({ params }) => {
   if (!case_) return { notFound: true }
 
   // Convert content regardless of format (TipTap JSON or HTML)
-  const htmlContent = tiptapToHtml(case_.content)
-
+  let htmlContent = tiptapToHtml(case_.content)
+  // Sanitize: remove tags that break page layout when injected
+  htmlContent = htmlContent
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<title[^>]*>[\s\S]*?<\/title>/gi, '')
+    .replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, '')
+    .replace(/<header[^>]*>[\s\S]*?<\/header>/gi, '')
+    .replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, '')
+    .replace(/<html[^>]*>/gi, '')
+    .replace(/<\/html>/gi, '')
+    .replace(/<head[^>]*>[\s\S]*?<\/head>/gi, '')
+    .replace(/<body[^>]*>/gi, '')
+    .replace(/<\/body>/gi, '')
   return { props: { case_, htmlContent }, revalidate: 60 }
 }

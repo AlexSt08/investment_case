@@ -328,7 +328,18 @@ export default function CaseEditor({ caseId }: Props) {
   const handleSave = async (publish = false) => {
     if (!title.trim()) { setError('Le titre est obligatoire.'); return }
     setSaving(true); setError('')
-    const payload = { title: title.trim(), subtitle: subtitle.trim() || null, slug: slug.trim(), excerpt: excerpt.trim() || null, rating: rating || null, target_horizon: horizon || null, sector_id: sectorId || null, content: html, updated_at: new Date().toISOString(), ...(publish ? { published: true, published_at: new Date().toISOString() } : {}) }
+    // Sanitize HTML before saving — remove layout-breaking tags from template pastes
+    const cleanHtml = html
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+      .replace(/<title[^>]*>[\s\S]*?<\/title>/gi, '')
+      .replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, '')
+      .replace(/<header[^>]*>[\s\S]*?<\/header>/gi, '')
+      .replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, '')
+      .replace(/<html[^>]*>/gi, '').replace(/<\/html>/gi, '')
+      .replace(/<head[^>]*>[\s\S]*?<\/head>/gi, '')
+      .replace(/<body[^>]*>/gi, '').replace(/<\/body>/gi, '')
+    const payload = { title: title.trim(), subtitle: subtitle.trim() || null, slug: slug.trim(), excerpt: excerpt.trim() || null, rating: rating || null, target_horizon: horizon || null, sector_id: sectorId || null, content: cleanHtml, updated_at: new Date().toISOString(), ...(publish ? { published: true, published_at: new Date().toISOString() } : {}) }
     let savedId = caseId
     if (isEdit) {
       const { error: err } = await supabase.from('investment_cases').update(payload).eq('id', caseId)
@@ -353,7 +364,7 @@ export default function CaseEditor({ caseId }: Props) {
       <Head><title>{isEdit ? 'Éditer' : 'Nouvelle analyse'} — Admin αAlex</title></Head>
       {showChart && <ChartModal onInsert={h => setHtml(prev => prev + h)} onClose={() => setShowChart(false)} />}
       <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
-        <nav style={{ borderBottom: '1px solid var(--border)', background: 'var(--bg-card)', position: 'sticky', top: 0, zIndex: 50 }}>
+        <nav style={{ borderBottom: '1px solid var(--border)', background: 'var(--bg-card)', position: 'sticky', top: 0, zIndex: 50, width: '100%', left: 0 }}>
           <div style={{ maxWidth: 1400, margin: '0 auto', padding: '0 24px', height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
               <Link href="/admin" style={{ color: 'var(--text-muted)', textDecoration: 'none', fontSize: '0.8rem' }}>← Dashboard</Link>
