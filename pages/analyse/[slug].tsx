@@ -99,7 +99,7 @@ export default function AnalysePage({ case_, htmlContent }: Props) {
 
       <Nav />
 
-      <article>
+      <div>
         {/* ── Header ── */}
         <header style={{ padding: '56px 0 40px', borderBottom: '1px solid var(--border)' }}>
           <div className="container" style={{ maxWidth: 900 }}>
@@ -235,7 +235,7 @@ export default function AnalysePage({ case_, htmlContent }: Props) {
             <Link href="/analyses" style={{ color: 'var(--accent)', textDecoration: 'none', fontSize: '0.85rem' }}>← Toutes les analyses</Link>
           </div>
         </div>
-      </article>
+      </div>
 
       <footer>
         <div className="footer-inner">

@@ -87,7 +87,13 @@ nav {
   right: 0;
   background: var(--ft-slate);
   border-bottom: 3px solid var(--ft-red);
+  box-sizing: border-box;
+  display: block;
 }
+
+/* Prevent any parent from constraining nav width */
+nav, nav * { max-width: none; }
+nav .nav-inner { max-width: var(--max-width); }
 
 .nav-inner {
   display: flex;
