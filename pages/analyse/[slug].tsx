@@ -118,9 +118,9 @@ export default function AnalysePage({ case_, htmlContent }: Props) {
               {caseCompanies.slice(0, 2).map(cc => cc.companies && (
                 <span key={cc.id} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                   <span>›</span>
-                  <Link href={`/ticker/${cc.companies.ticker}`} className="badge-ticker" style={{ fontSize: '0.68rem' }}>
+                  <span className="badge-ticker" style={{ fontSize: '0.68rem' }}>
                     {cc.companies.ticker}
-                  </Link>
+                  </span>
                 </span>
               ))}
             </div>
@@ -140,14 +140,11 @@ export default function AnalysePage({ case_, htmlContent }: Props) {
                   const comp = cc.companies
                   if (!comp) return null
                   return (
-                    <Link key={cc.id} href={`/ticker/${comp.ticker}`} style={{
-                      textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 10,
+                    <div key={cc.id} style={{
+                      display: 'flex', alignItems: 'center', gap: 10,
                       padding: '10px 16px', background: 'var(--bg-elevated)', border: '1px solid var(--border)',
-                      borderRadius: 8, transition: 'border-color 0.2s',
-                    }}
-                      onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--accent-border)'}
-                      onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
-                    >
+                      borderRadius: 8,
+                    }}>
                       <span className="badge-ticker" style={{ fontSize: '0.8rem' }}>{comp.ticker}</span>
                       {cc.rating && (
                         <span className={`badge-rating ${cc.rating}`} style={{ fontSize: '0.7rem' }}>
@@ -160,7 +157,7 @@ export default function AnalysePage({ case_, htmlContent }: Props) {
                           {cc.upside}
                         </span>
                       )}
-                    </Link>
+                    </div>
                   )
                 })}
               </div>
@@ -225,7 +222,7 @@ export default function AnalysePage({ case_, htmlContent }: Props) {
               <p style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', letterSpacing: '0.1em', marginBottom: 12 }}>SOCIÉTÉS MENTIONNÉES</p>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 {caseCompanies.map(cc => cc.companies && (
-                  <Link key={cc.id} href={`/ticker/${cc.companies.ticker}`} className="badge-ticker">{cc.companies.ticker}</Link>
+                  <span key={cc.id} className="badge-ticker">{cc.companies.ticker}</span>
                 ))}
               </div>
             </div>

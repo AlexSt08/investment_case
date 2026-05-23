@@ -2,11 +2,10 @@ import Link from 'next/link'
 import { useRouter } from 'next/router'
 
 const NAV_LINKS = [
-  { href: '/',        label: 'Accueil' },
+  { href: '/',         label: 'Accueil' },
   { href: '/secteurs', label: 'Secteurs' },
-  { href: '/tickers', label: 'Tickers' },
   { href: '/analyses', label: 'Analyses' },
-  { href: '/modeles', label: 'Modèles' },
+  { href: '/modeles',  label: 'Modèles' },
 ]
 
 export default function Nav() {
