@@ -1,48 +1,23 @@
 import { useState, useCallback } from 'react'
 import type { FinancialsResponse } from '../../pages/api/financials/[ticker]'
 
-// ── Types ─────────────────────────────────────────────────────────────────
 interface Params {
-  revenueTTM: number
-  nrrInit: number
-  grossMargin: number
-  wacc: number
-  horizon: number
-  nrrTerminal: number
-  fcfMargin: number
-  tvMultiple: number
-  npvLogos: number
-  sbc: number
-  netCash: number
-  mktCap: number
+  revenueTTM: number; nrrInit: number; grossMargin: number; wacc: number
+  horizon: number; nrrTerminal: number; fcfMargin: number; tvMultiple: number
+  npvLogos: number; sbc: number; netCash: number; mktCap: number
 }
-
 interface CohortRow {
-  year: number
-  nrr: number
-  revenue: number
-  grossProfit: number
-  discountFactor: number
-  pvGP: number
-  ratio: number
+  year: number; nrr: number; revenue: number; grossProfit: number
+  discountFactor: number; pvGP: number; ratio: number
 }
-
 interface Results {
-  rows: CohortRow[]
-  sumPV: number
-  pvTV: number
-  tvGross: number
-  revenueY10: number
-  evCohort: number
-  equityImplied: number
-  upside: number
+  rows: CohortRow[]; sumPV: number; pvTV: number; tvGross: number
+  revenueY10: number; evCohort: number; equityImplied: number; upside: number
 }
 
-// ── Calculation ───────────────────────────────────────────────────────────
 function compute(p: Params): Results {
   const rows: CohortRow[] = []
-  let curRev = p.revenueTTM
-  let sumPV = 0
+  let curRev = p.revenueTTM, sumPV = 0
   for (let n = 1; n <= p.horizon; n++) {
     const progress = p.horizon > 1 ? (n - 1) / (p.horizon - 1) : 0
     const nrr = Math.max(p.nrrTerminal, p.nrrInit - (p.nrrInit - p.nrrTerminal) * progress)
@@ -59,205 +34,111 @@ function compute(p: Params): Results {
   const pvTV = tvGross / Math.pow(1 + p.wacc, p.horizon)
   const evCohort = sumPV + pvTV + p.npvLogos
   const equityImplied = evCohort - p.sbc + p.netCash
-  const upside = equityImplied / p.mktCap - 1
-  return { rows, sumPV, pvTV, tvGross, revenueY10, evCohort, equityImplied, upside }
+  return { rows, sumPV, pvTV, tvGross, revenueY10, evCohort, equityImplied, upside: equityImplied / p.mktCap - 1 }
 }
 
 // ── NRR Trajectory Chart ──────────────────────────────────────────────────
-function NRRChart({ rows, wacc, nrrInit, nrrTerminal }: {
-  rows: CohortRow[]
-  wacc: number
-  nrrInit: number
-  nrrTerminal: number
-}) {
+function NRRChart({ rows, wacc, nrrInit }: { rows: CohortRow[]; wacc: number; nrrInit: number; nrrTerminal: number }) {
   if (rows.length === 0) return null
-
-  // Layout
-  const VW = 400; const VH = 110
-  const PL = 38; const PR = 14; const PT = 12; const PB = 28
-  const plotW = VW - PL - PR
-  const plotH = VH - PT - PB
-
-  // Y scale — anchored at 100% (NRR floor), top = nrrInit + 4pt padding
-  const yMin = 100                              // plancher 100%
-  const yMax = Math.ceil(nrrInit * 100) + 4     // ex: 130 pour NRR 126%
+  const VW = 400, VH = 110, PL = 38, PR = 14, PT = 12, PB = 28
+  const plotW = VW - PL - PR, plotH = VH - PT - PB
+  const yMin = 100
+  const yMax = Math.ceil(nrrInit * 100) + 4
   const yRange = yMax - yMin
-
-  // WACC threshold line: NRR = 1 + WACC
-  const waccThresh = (1 + wacc) * 100           // ex: 110 pour WACC 10%
-
+  const waccThresh = (1 + wacc) * 100
   const toX = (i: number) => PL + (i / (rows.length - 1)) * plotW
   const toY = (pct: number) => PT + (1 - (pct - yMin) / yRange) * plotH
-
-  // NRR line points
   const nrrPcts = rows.map(r => r.nrr * 100)
   const linePts = nrrPcts.map((v, i) => `${toX(i)},${toY(v)}`).join(' ')
-
-  // Fill area above threshold (green) — clip to WACC line at bottom
   const threshY = toY(waccThresh)
-  const areaAbovePts = [
-    `${toX(0)},${threshY}`,
-    ...nrrPcts.map((v, i) => `${toX(i)},${Math.min(toY(v), threshY)}`),
-    `${toX(rows.length - 1)},${threshY}`,
-  ].join(' ')
-
-  // Fill area below threshold (red) — only if NRR crosses below WACC
+  const areaAbovePts = [`${toX(0)},${threshY}`, ...nrrPcts.map((v, i) => `${toX(i)},${Math.min(toY(v), threshY)}`), `${toX(rows.length - 1)},${threshY}`].join(' ')
   const hasBelowZone = nrrPcts.some(v => v < waccThresh)
-  const areaBelowPts = hasBelowZone ? [
-    `${toX(0)},${threshY}`,
-    ...nrrPcts.map((v, i) => `${toX(i)},${Math.max(toY(v), threshY)}`),
-    `${toX(rows.length - 1)},${threshY}`,
-  ].join(' ') : ''
-
-  // Y-axis tick values
-  const yTicks = [100, Math.round((yMin + yMax) / 2), yMax]
-    .filter((v, i, a) => a.indexOf(v) === i && v >= yMin && v <= yMax)
-
-  // X-axis labels: Y1, mid, last
+  const areaBelowPts = hasBelowZone ? [`${toX(0)},${threshY}`, ...nrrPcts.map((v, i) => `${toX(i)},${Math.max(toY(v), threshY)}`), `${toX(rows.length - 1)},${threshY}`].join(' ') : ''
+  const yTicks = [100, Math.round((yMin + yMax) / 2), yMax].filter((v, i, a) => a.indexOf(v) === i)
   const midIdx = Math.floor((rows.length - 1) / 2)
-  const xLabels = [
-    { i: 0,               label: `Y1` },
-    { i: midIdx,          label: `Y${rows.midIdx ?? midIdx + 1}` },
-    { i: rows.length - 1, label: `Y${rows.length}` },
-  ]
-
-  // Key point labels on the line (Y1, mid, last)
   const labelPoints = [0, midIdx, rows.length - 1]
-
   return (
-    <svg
-      viewBox={`0 0 ${VW} ${VH}`}
-      width="100%"
-      style={{ display: 'block', overflow: 'visible' }}
-      aria-label="Trajectoire NRR — déclin linéaire vers maturité"
-    >
-      {/* ── Grid lines ── */}
-      {yTicks.map(v => (
-        <line
-          key={v}
-          x1={PL} x2={VW - PR}
-          y1={toY(v)} y2={toY(v)}
-          stroke="#E0D8CC" strokeWidth={0.5} strokeDasharray={v === 100 ? '0' : '2,3'}
-        />
+    <svg viewBox={`0 0 ${VW} ${VH}`} width="100%" style={{ display: 'block', overflow: 'visible' }}>
+      {yTicks.map(v => <line key={v} x1={PL} x2={VW - PR} y1={toY(v)} y2={toY(v)} stroke="#E0D8CC" strokeWidth={0.5} strokeDasharray={v === 100 ? '0' : '2,3'} />)}
+      <polygon points={areaAbovePts} fill="#007a3d" fillOpacity={0.07} />
+      {hasBelowZone && areaBelowPts && <polygon points={areaBelowPts} fill="#cc0000" fillOpacity={0.07} />}
+      <line x1={PL} x2={VW - PR} y1={threshY} y2={threshY} stroke="#b06000" strokeWidth={1} strokeDasharray="4,3" />
+      <text x={VW - PR + 2} y={threshY + 3.5} fontSize={7} fill="#b06000" fontFamily="'Courier New', monospace">{waccThresh.toFixed(0)}%</text>
+      <text x={PL + 3} y={threshY - 3} fontSize={6.5} fill="#b06000" fontFamily="'Courier New', monospace" opacity={0.8}>NRR = WACC</text>
+      <polyline points={linePts} fill="none" stroke="#0d7680" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+      {labelPoints.map(i => (
+        <g key={i}>
+          <circle cx={toX(i)} cy={toY(nrrPcts[i])} r={3} fill="#0d7680" />
+          <text x={toX(i)} y={toY(nrrPcts[i]) - 6} textAnchor="middle" fontSize={7.5} fontWeight="600" fill="#0d7680" fontFamily="'Courier New', monospace">{nrrPcts[i].toFixed(0)}%</text>
+        </g>
       ))}
-
-      {/* ── Zone verte : NRR > WACC ── */}
-      <polygon
-        points={areaAbovePts}
-        fill="#007a3d" fillOpacity={0.07}
-      />
-
-      {/* ── Zone rouge : NRR < WACC ── */}
-      {hasBelowZone && areaBelowPts && (
-        <polygon
-          points={areaBelowPts}
-          fill="#cc0000" fillOpacity={0.07}
-        />
-      )}
-
-      {/* ── Ligne seuil WACC (NRR = 1+WACC) ── */}
-      <line
-        x1={PL} x2={VW - PR}
-        y1={threshY} y2={threshY}
-        stroke="#b06000" strokeWidth={1} strokeDasharray="4,3"
-      />
-      <text
-        x={VW - PR + 2} y={threshY + 3.5}
-        fontSize={7} fill="#b06000"
-        fontFamily="'Courier New', monospace"
-      >
-        {waccThresh.toFixed(0)}%
-      </text>
-      <text
-        x={PL + 3} y={threshY - 3}
-        fontSize={6.5} fill="#b06000"
-        fontFamily="'Courier New', monospace"
-        opacity={0.8}
-      >
-        NRR = WACC
-      </text>
-
-      {/* ── Courbe NRR ── */}
-      <polyline
-        points={linePts}
-        fill="none"
-        stroke="#0d7680" strokeWidth={2}
-        strokeLinejoin="round" strokeLinecap="round"
-      />
-
-      {/* ── Points et labels sur la courbe ── */}
-      {labelPoints.map(i => {
-        const x = toX(i)
-        const y = toY(nrrPcts[i])
-        const above = y > threshY  // below threshold visually = NRR < WACC
-        return (
-          <g key={i}>
-            <circle cx={x} cy={y} r={3} fill="#0d7680" />
-            <text
-              x={x}
-              y={y - 6}
-              textAnchor="middle"
-              fontSize={7.5}
-              fontWeight="600"
-              fill="#0d7680"
-              fontFamily="'Courier New', monospace"
-            >
-              {nrrPcts[i].toFixed(0)}%
-            </text>
-          </g>
-        )
-      })}
-
-      {/* ── Axe Y labels ── */}
-      {yTicks.map(v => (
-        <text
-          key={v}
-          x={PL - 3} y={toY(v) + 3.5}
-          textAnchor="end"
-          fontSize={7}
-          fill={v === 100 ? '#aaa' : '#888'}
-          fontFamily="'Courier New', monospace"
-        >
-          {v}%
-        </text>
-      ))}
-
-      {/* ── Axe X labels ── */}
-      {xLabels.map(({ i, label }) => (
-        <text
-          key={i}
-          x={toX(i)} y={VH - 4}
-          textAnchor="middle"
-          fontSize={7}
-          fill="#999"
-          fontFamily="'Courier New', monospace"
-        >
-          {i === 0 ? `Y1` : i === rows.length - 1 ? `Y${rows.length}` : `Y${i + 1}`}
-        </text>
-      ))}
-
-      {/* ── Bordure plot area ── */}
+      {yTicks.map(v => <text key={v} x={PL - 3} y={toY(v) + 3.5} textAnchor="end" fontSize={7} fill={v === 100 ? '#aaa' : '#888'} fontFamily="'Courier New', monospace">{v}%</text>)}
+      {[0, midIdx, rows.length - 1].map(i => <text key={i} x={toX(i)} y={VH - 4} textAnchor="middle" fontSize={7} fill="#999" fontFamily="'Courier New', monospace">{i === 0 ? 'Y1' : i === rows.length - 1 ? `Y${rows.length}` : `Y${i + 1}`}</text>)}
       <line x1={PL} x2={PL} y1={PT} y2={VH - PB} stroke="#E0D8CC" strokeWidth={0.5} />
     </svg>
   )
 }
 
-// ── SliderRow ─────────────────────────────────────────────────────────────
-function SliderRow({ label, value, min, max, step, format, onChange, highlight = false }: {
+// ── SliderRow — avec marqueur zéro optionnel ──────────────────────────────
+function SliderRow({ label, value, min, max, step, format, onChange, highlight = false, showZeroMark = false }: {
   label: string; value: number; min: number; max: number; step: number
-  format: (v: number) => string; onChange: (v: number) => void; highlight?: boolean
+  format: (v: number) => string; onChange: (v: number) => void
+  highlight?: boolean; showZeroMark?: boolean
 }) {
+  // Position du zéro sur la track (0..100%)
+  const zeroPos = min < 0 && max > 0 ? ((0 - min) / (max - min)) * 100 : null
+  const isNegative = showZeroMark && value < 0
+
   return (
     <div style={{ padding: '10px 0', borderBottom: '1px solid var(--border)', background: highlight ? 'rgba(191,78,20,0.04)' : 'transparent' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
         <span style={{ fontFamily: 'var(--font-sans)', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>{label}</span>
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.82rem', fontWeight: 600, color: highlight ? '#BF4E14' : 'var(--text-primary)', minWidth: 60, textAlign: 'right' }}>
+        <span style={{
+          fontFamily: 'var(--font-mono)', fontSize: '0.82rem', fontWeight: 600, minWidth: 60, textAlign: 'right' as const,
+          color: highlight ? '#BF4E14' : isNegative ? '#cc0000' : 'var(--text-primary)',
+        }}>
           {format(value)}
+          {isNegative && <span style={{ fontSize: '0.6rem', marginLeft: 4, opacity: 0.7, fontWeight: 400 }}>dette</span>}
         </span>
       </div>
-      <input type="range" min={min} max={max} step={step} value={value}
-        onChange={e => onChange(parseFloat(e.target.value))}
-        style={{ width: '100%', accentColor: highlight ? '#BF4E14' : '#cc0000' }} />
+
+      {/* Track wrapper avec marqueur zéro */}
+      <div style={{ position: 'relative' as const }}>
+        <input
+          type="range" min={min} max={max} step={step} value={value}
+          onChange={e => onChange(parseFloat(e.target.value))}
+          style={{ width: '100%', accentColor: isNegative ? '#cc0000' : highlight ? '#BF4E14' : '#cc0000' }}
+        />
+        {/* Tick zéro */}
+        {zeroPos !== null && (
+          <div style={{
+            position: 'absolute' as const,
+            left: `calc(${zeroPos}% - 0.5px)`,
+            top: '50%',
+            transform: 'translateY(-50%)',
+            width: 1,
+            height: 10,
+            background: isNegative ? '#cc000060' : '#0000001a',
+            pointerEvents: 'none' as const,
+          }} />
+        )}
+        {/* Label "0" sous la track */}
+        {zeroPos !== null && (
+          <div style={{
+            position: 'absolute' as const,
+            left: `${zeroPos}%`,
+            top: '100%',
+            transform: 'translateX(-50%)',
+            fontFamily: 'var(--font-mono)',
+            fontSize: '0.55rem',
+            color: isNegative ? '#cc000080' : '#00000030',
+            marginTop: 1,
+            pointerEvents: 'none' as const,
+          }}>
+            0
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -275,14 +156,14 @@ function KPICard({ label, value, sub, highlight = false, positive }: {
   )
 }
 
-// ── Cache status badge ────────────────────────────────────────────────────
+// ── Cache badge ───────────────────────────────────────────────────────────
 function CacheBadge({ status, label, quality }: { status: string; label: string; quality?: string }) {
   const cfg: Record<string, { bg: string; color: string; icon: string }> = {
-    static:     { bg: 'rgba(0,122,61,0.08)',    color: '#007a3d', icon: '✓' },
-    fresh:      { bg: 'rgba(0,122,61,0.08)',    color: '#007a3d', icon: '✓' },
-    window_24h: { bg: 'rgba(176,96,0,0.08)',    color: '#b06000', icon: '◉' },
-    cache:      { bg: 'rgba(13,118,128,0.08)',  color: '#0d7680', icon: '⟳' },
-    fmp:        { bg: 'rgba(15,71,97,0.08)',    color: '#0F4761', icon: '↓' },
+    static:     { bg: 'rgba(0,122,61,0.08)',   color: '#007a3d', icon: '✓' },
+    fresh:      { bg: 'rgba(0,122,61,0.08)',   color: '#007a3d', icon: '✓' },
+    window_24h: { bg: 'rgba(176,96,0,0.08)',   color: '#b06000', icon: '◉' },
+    cache:      { bg: 'rgba(13,118,128,0.08)', color: '#0d7680', icon: '⟳' },
+    fmp:        { bg: 'rgba(15,71,97,0.08)',   color: '#0F4761', icon: '↓' },
   }
   const c = cfg[status] ?? cfg['cache']
   return (
@@ -296,14 +177,12 @@ function CacheBadge({ status, label, quality }: { status: string; label: string;
   )
 }
 
-// ── Default params ────────────────────────────────────────────────────────
 const DEFAULT_PARAMS: Params = {
   revenueTTM: 4.47, nrrInit: 1.26, grossMargin: 0.75, wacc: 0.10,
   horizon: 10, nrrTerminal: 1.07, fcfMargin: 0.32, tvMultiple: 25,
   npvLogos: 13.0, sbc: 5.0, netCash: 3.5, mktCap: 57.0,
 }
 
-// ── Main Component ────────────────────────────────────────────────────────
 export default function CohortDCFModel() {
   const [params, setParams]           = useState<Params>(DEFAULT_PARAMS)
   const [activeTab, setActiveTab]     = useState<'model' | 'table' | 'method'>('model')
@@ -322,28 +201,15 @@ export default function CohortDCFModel() {
     if (!t) return
     setFetching(true); setFetchError(''); setNrrMissing(false)
     try {
-      const url = `/api/financials/${t}${force ? '?force=true' : ''}`
-      const r   = await fetch(url)
+      const r    = await fetch(`/api/financials/${t}${force ? '?force=true' : ''}`)
       const data: FinancialsResponse = await r.json()
       if (!r.ok) { setFetchError((data as any).error ?? 'Erreur inconnue'); return }
       setFetchedData(data)
       setCompanyName(`${data.companyName} (${t})`)
-      setParams(p => ({
-        ...p,
-        revenueTTM:  data.revenueTTM,
-        grossMargin: data.grossMargin,
-        fcfMargin:   Math.max(0.05, data.fcfMargin),
-        mktCap:      data.mktCap,
-        netCash:     data.netCash,
-        sbc:         data.sbc,
-        ...(data.nrr ? { nrrInit: data.nrr } : {}),
-      }))
+      setParams(p => ({ ...p, revenueTTM: data.revenueTTM, grossMargin: data.grossMargin, fcfMargin: Math.max(0.05, data.fcfMargin), mktCap: data.mktCap, netCash: data.netCash, sbc: data.sbc, ...(data.nrr ? { nrrInit: data.nrr } : {}) }))
       if (!data.nrr) setNrrMissing(true)
-    } catch {
-      setFetchError("Impossible de joindre l'API")
-    } finally {
-      setFetching(false)
-    }
+    } catch { setFetchError("Impossible de joindre l'API") }
+    finally { setFetching(false) }
   }
 
   const tabStyle = (tab: string) => ({
@@ -357,7 +223,7 @@ export default function CohortDCFModel() {
   return (
     <div style={{ fontFamily: 'var(--font-body)' }}>
 
-      {/* ── KPI Strip ── */}
+      {/* KPI Strip */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, marginBottom: 28 }}>
         <KPICard label="Equity implicite" value={`$${res.equityImplied.toFixed(1)}B`} sub={`vs $${params.mktCap}B marché`} highlight />
         <KPICard label="Upside / (Downside)" value={`${res.upside >= 0 ? '+' : ''}${(res.upside * 100).toFixed(0)}%`} sub="méthode cohort" positive={res.upside > 0.1} />
@@ -368,55 +234,48 @@ export default function CohortDCFModel() {
           positive={params.nrrInit / (1 + params.wacc) > 1} />
       </div>
 
-      {/* ── Tabs ── */}
+      {/* Tabs */}
       <div style={{ borderBottom: '1px solid var(--border-rule)', marginBottom: 24, display: 'flex' }}>
         {[['model', 'Modèle interactif'], ['table', 'Table cohorte'], ['method', 'Méthodologie']].map(([t, l]) => (
           <button key={t} onClick={() => setActiveTab(t as any)} style={tabStyle(t)}>{l}</button>
         ))}
       </div>
 
-      {/* ── TAB: Model ── */}
       {activeTab === 'model' && (
         <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: 28, alignItems: 'start' }}>
 
           {/* Controls */}
           <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 4, padding: '18px 20px' }}>
 
-            {/* Auto-remplissage */}
+            {/* ── Auto-remplissage — layout fixé ── */}
             <div style={{ padding: '12px 14px', background: 'var(--bg)', border: '1px solid var(--border-rule)', borderRadius: 4, marginBottom: 16 }}>
               <p style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', letterSpacing: '0.12em', color: 'var(--text-muted)', textTransform: 'uppercase' as const, marginBottom: 8 }}>
                 Auto-remplissage
               </p>
-              <div style={{ display: 'flex', gap: 6 }}>
+              {/* Flex row avec alignItems center pour aligner input et bouton */}
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center', width: '100%' }}>
                 <input
                   value={tickerInput}
                   onChange={e => setTickerInput(e.target.value.toUpperCase())}
                   onKeyDown={e => e.key === 'Enter' && fetchTicker()}
                   placeholder="SNOW, DDOG, NET…"
-                  style={{ flex: 1, padding: '6px 10px', fontFamily: 'var(--font-mono)', fontSize: '0.82rem', letterSpacing: '0.06em', background: 'var(--bg-card)', border: '1px solid var(--border-rule)', borderRadius: 2, color: 'var(--text-primary)', outline: 'none', textTransform: 'uppercase' as const }}
+                  style={{ flex: 1, minWidth: 0, padding: '6px 10px', fontFamily: 'var(--font-mono)', fontSize: '0.82rem', letterSpacing: '0.06em', background: 'var(--bg-card)', border: '1px solid var(--border-rule)', borderRadius: 2, color: 'var(--text-primary)', outline: 'none', textTransform: 'uppercase' as const }}
                 />
-                <button onClick={() => fetchTicker()} disabled={fetching} style={{ padding: '6px 14px', fontFamily: 'var(--font-sans)', fontSize: '0.75rem', background: fetching ? 'var(--bg-elevated)' : 'var(--ft-slate)', color: fetching ? 'var(--text-muted)' : '#fff', border: 'none', borderRadius: 2, cursor: fetching ? 'wait' : 'pointer', whiteSpace: 'nowrap' as const }}>
+                <button
+                  onClick={() => fetchTicker()} disabled={fetching}
+                  style={{ flexShrink: 0, padding: '6px 12px', fontFamily: 'var(--font-sans)', fontSize: '0.75rem', background: fetching ? 'var(--bg-elevated)' : 'var(--ft-slate)', color: fetching ? 'var(--text-muted)' : '#fff', border: 'none', borderRadius: 2, cursor: fetching ? 'wait' : 'pointer', whiteSpace: 'nowrap' as const }}
+                >
                   {fetching ? '…' : '↓ Charger'}
                 </button>
               </div>
-              {fetchedData && !fetchError && (
-                <CacheBadge status={fetchedData.cacheStatus} label={fetchedData.cacheLabel} quality={fetchedData.earningsQuality} />
-              )}
+              {fetchedData && !fetchError && <CacheBadge status={fetchedData.cacheStatus} label={fetchedData.cacheLabel} quality={fetchedData.earningsQuality} />}
               {fetchedData && fetchedData.cacheStatus === 'fresh' && (
                 <button onClick={() => fetchTicker(true)} style={{ marginTop: 6, width: '100%', padding: '4px 0', fontFamily: 'var(--font-sans)', fontSize: '0.68rem', color: 'var(--text-muted)', background: 'transparent', border: '1px dashed var(--border)', borderRadius: 2, cursor: 'pointer' }}>
                   ↻ Forcer la mise à jour (appel FMP)
                 </button>
               )}
-              {nrrMissing && (
-                <p style={{ marginTop: 6, fontFamily: 'var(--font-sans)', fontSize: '0.7rem', color: '#b06000', lineHeight: 1.4 }}>
-                  ⚠ NRR non disponible via API — ajustez manuellement le slider
-                </p>
-              )}
-              {fetchError && (
-                <p style={{ marginTop: 6, fontFamily: 'var(--font-sans)', fontSize: '0.72rem', color: '#cc0000' }}>
-                  ✗ {fetchError}
-                </p>
-              )}
+              {nrrMissing && <p style={{ marginTop: 6, fontFamily: 'var(--font-sans)', fontSize: '0.7rem', color: '#b06000', lineHeight: 1.4 }}>⚠ NRR non disponible via API — ajustez manuellement le slider</p>}
+              {fetchError && <p style={{ marginTop: 6, fontFamily: 'var(--font-sans)', fontSize: '0.72rem', color: '#cc0000' }}>✗ {fetchError}</p>}
             </div>
 
             <p style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', letterSpacing: '0.12em', color: 'var(--text-muted)', textTransform: 'uppercase' as const, marginBottom: 14 }}>
@@ -426,7 +285,8 @@ export default function CohortDCFModel() {
             <p style={{ fontFamily: 'var(--font-sans)', fontSize: '0.68rem', color: 'var(--ft-teal)', letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 8 }}>Société</p>
             <SliderRow label="Revenu TTM ($B)" value={params.revenueTTM} min={1} max={20} step={0.1} format={v => `$${v.toFixed(1)}B`} onChange={set('revenueTTM')} />
             <SliderRow label="Mkt Cap actuelle ($B)" value={params.mktCap} min={10} max={300} step={1} format={v => `$${v.toFixed(0)}B`} onChange={set('mktCap')} />
-            <SliderRow label="Net Cash ($B)" value={params.netCash} min={-10} max={20} step={0.5} format={v => `$${v.toFixed(1)}B`} onChange={set('netCash')} />
+            {/* Net Cash — min négatif, marqueur zéro activé */}
+            <SliderRow label="Net Cash ($B)" value={params.netCash} min={-20} max={30} step={0.5} format={v => `$${v.toFixed(1)}B`} onChange={set('netCash')} showZeroMark />
 
             <p style={{ fontFamily: 'var(--font-sans)', fontSize: '0.68rem', color: 'var(--ft-teal)', letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 8, marginTop: 16 }}>Métriques clés</p>
             <SliderRow label="NRR initial" value={params.nrrInit} min={1.00} max={1.60} step={0.01} format={v => `${(v * 100).toFixed(0)}%`} onChange={set('nrrInit')} highlight />
@@ -450,13 +310,11 @@ export default function CohortDCFModel() {
             </button>
           </div>
 
-          {/* Charts + Bridge */}
+          {/* Charts */}
           <div>
             {/* PV Chart */}
             <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 4, padding: '18px 20px', marginBottom: 16 }}>
-              <p style={{ fontFamily: 'var(--font-sans)', fontSize: '0.68rem', letterSpacing: '0.1em', color: 'var(--text-muted)', textTransform: 'uppercase' as const, marginBottom: 14 }}>
-                PV Gross Profit par année — base existante
-              </p>
+              <p style={{ fontFamily: 'var(--font-sans)', fontSize: '0.68rem', letterSpacing: '0.1em', color: 'var(--text-muted)', textTransform: 'uppercase' as const, marginBottom: 14 }}>PV Gross Profit par année — base existante</p>
               <div style={{ display: 'flex', gap: 0, alignItems: 'flex-end', height: 140 }}>
                 {res.rows.map((row, i) => {
                   const maxPV = Math.max(...res.rows.map(r => r.pvGP))
@@ -477,33 +335,17 @@ export default function CohortDCFModel() {
               </div>
             </div>
 
-            {/* ── NRR Trajectory Chart ── */}
+            {/* NRR Chart */}
             <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 4, padding: '18px 20px', marginBottom: 16 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
-                <p style={{ fontFamily: 'var(--font-sans)', fontSize: '0.68rem', letterSpacing: '0.1em', color: 'var(--text-muted)', textTransform: 'uppercase' as const, margin: 0 }}>
-                  Trajectoire NRR — déclin vers maturité
-                </p>
-                <div style={{ display: 'flex', gap: 12, fontFamily: 'var(--font-mono)', fontSize: '0.6rem', color: 'var(--text-muted)' }}>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                    <span style={{ width: 16, height: 2, background: '#b06000', display: 'inline-block', borderTop: '1px dashed #b06000' }} />
-                    NRR = WACC
-                  </span>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                    <span style={{ width: 8, height: 8, background: 'rgba(0,122,61,0.15)', border: '1px solid #007a3d', display: 'inline-block' }} />
-                    Divergent
-                  </span>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                    <span style={{ width: 8, height: 8, background: 'rgba(204,0,0,0.1)', border: '1px solid #cc0000', display: 'inline-block' }} />
-                    Convergent
-                  </span>
+                <p style={{ fontFamily: 'var(--font-sans)', fontSize: '0.68rem', letterSpacing: '0.1em', color: 'var(--text-muted)', textTransform: 'uppercase' as const, margin: 0 }}>Trajectoire NRR — déclin vers maturité</p>
+                <div style={{ display: 'flex', gap: 10, fontFamily: 'var(--font-mono)', fontSize: '0.6rem', color: 'var(--text-muted)' }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}><span style={{ width: 14, height: 1, borderTop: '1px dashed #b06000', display: 'inline-block' }} />NRR=WACC</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}><span style={{ width: 8, height: 8, background: 'rgba(0,122,61,0.12)', border: '1px solid #007a3d', display: 'inline-block' }} />Divergent</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}><span style={{ width: 8, height: 8, background: 'rgba(204,0,0,0.1)', border: '1px solid #cc0000', display: 'inline-block' }} />Convergent</span>
                 </div>
               </div>
-              <NRRChart
-                rows={res.rows}
-                wacc={params.wacc}
-                nrrInit={params.nrrInit}
-                nrrTerminal={params.nrrTerminal}
-              />
+              <NRRChart rows={res.rows} wacc={params.wacc} nrrInit={params.nrrInit} nrrTerminal={params.nrrTerminal} />
             </div>
 
             {/* EV Bridge */}
@@ -511,18 +353,16 @@ export default function CohortDCFModel() {
               <div style={{ padding: '12px 20px', borderBottom: '1px solid var(--border)', fontFamily: 'var(--font-sans)', fontSize: '0.68rem', letterSpacing: '0.1em', color: 'var(--text-muted)', textTransform: 'uppercase' as const }}>Bridge Equity Value</div>
               {[
                 { label: 'NPV Base existante', value: res.sumPV, indent: 0 },
-                { label: 'PV Terminal Value', value: res.pvTV, indent: 0 },
+                { label: 'PV Terminal Value',  value: res.pvTV, indent: 0 },
                 { label: 'NPV Nouveaux logos', value: params.npvLogos, indent: 0 },
-                { label: 'EV Cohort totale', value: res.evCohort, indent: 0, total: true },
-                { label: 'SBC dilution', value: -params.sbc, indent: 1 },
-                { label: 'Net Cash', value: params.netCash, indent: 1 },
+                { label: 'EV Cohort totale',   value: res.evCohort, indent: 0, total: true },
+                { label: 'SBC dilution',        value: -params.sbc, indent: 1 },
+                { label: 'Net Cash',            value: params.netCash, indent: 1 },
                 { label: 'EQUITY VALUE IMPLICITE', value: res.equityImplied, indent: 0, total: true, accent: true },
                 { label: 'Market Cap actuelle', value: params.mktCap, indent: 0, muted: true },
               ].map((row, i) => (
                 <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: `${(row as any).total ? 10 : 8}px ${20 + row.indent * 12}px`, borderBottom: '1px solid var(--border)', background: (row as any).accent ? 'var(--bg-elevated)' : (row as any).total ? 'rgba(0,0,0,0.02)' : 'transparent', borderTop: (row as any).total ? '1px solid var(--border-strong)' : 'none' }}>
-                  <span style={{ fontFamily: (row as any).total ? 'var(--font-sans)' : 'var(--font-body)', fontSize: (row as any).total ? '0.78rem' : '0.82rem', fontWeight: (row as any).total ? 600 : 300, color: (row as any).muted ? 'var(--text-muted)' : 'var(--text-secondary)', letterSpacing: (row as any).total ? '0.04em' : '0' }}>
-                    {row.label}
-                  </span>
+                  <span style={{ fontFamily: (row as any).total ? 'var(--font-sans)' : 'var(--font-body)', fontSize: (row as any).total ? '0.78rem' : '0.82rem', fontWeight: (row as any).total ? 600 : 300, color: (row as any).muted ? 'var(--text-muted)' : 'var(--text-secondary)', letterSpacing: (row as any).total ? '0.04em' : '0' }}>{row.label}</span>
                   <span style={{ fontFamily: 'var(--font-mono)', fontSize: (row as any).total ? '1rem' : '0.85rem', fontWeight: (row as any).total ? 700 : 400, color: (row as any).accent ? (res.upside > 0 ? '#007a3d' : '#cc0000') : row.value < 0 ? '#cc0000' : 'var(--text-primary)' }}>
                     {row.value >= 0 ? '' : '('}${Math.abs(row.value).toFixed(1)}B{row.value < 0 ? ')' : ''}
                   </span>
@@ -539,13 +379,13 @@ export default function CohortDCFModel() {
         </div>
       )}
 
-      {/* ── TAB: Table ── */}
+      {/* Table tab */}
       {activeTab === 'table' && (
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-sans)', fontSize: '0.82rem' }}>
             <thead>
               <tr style={{ background: 'var(--bg-elevated)' }}>
-                {['Année', 'NRR effectif', 'Revenu ($B)', 'Gross Profit ($B)', 'Discount (×)', 'PV GP ($B)', 'NRR/WACC', 'Signal'].map(h => (
+                {['Année','NRR effectif','Revenu ($B)','Gross Profit ($B)','Discount (×)','PV GP ($B)','NRR/WACC','Signal'].map(h => (
                   <th key={h} style={{ padding: '10px 14px', textAlign: 'right', fontFamily: 'var(--font-mono)', fontSize: '0.62rem', letterSpacing: '0.1em', color: 'var(--text-muted)', fontWeight: 500, borderBottom: '2px solid var(--border-rule)', whiteSpace: 'nowrap' as const }}>{h}</th>
                 ))}
               </tr>
@@ -579,13 +419,13 @@ export default function CohortDCFModel() {
         </div>
       )}
 
-      {/* ── TAB: Method ── */}
+      {/* Method tab */}
       {activeTab === 'method' && (
         <div style={{ maxWidth: 680 }}>
           {[
-            { title: 'Pourquoi le DCF par cohorte ?', body: "Un modèle SaaS classique valorise les revenus futurs à partir d'un multiple d'ARR. Il ignore que le NRR crée des séries géométriques de revenus croissantes — pas décroissantes. Dès lors que NRR > WACC, chaque cohorte client est une rente dont la valeur actualisée diverge, et le modèle standard sous-estime structurellement l'equity value." },
+            { title: 'Pourquoi le DCF par cohorte ?', body: "Un modèle SaaS classique valorise les revenus futurs à partir d'un multiple d'ARR. Il ignore que le NRR crée des séries géométriques de revenus croissantes — pas décroissantes. Dès lors que NRR > WACC, chaque cohorte client est une rente dont la valeur actualisée diverge." },
             { title: 'La formule clé : NRR/WACC', body: "Le ratio NRR/(1+WACC) est le test central. Si ratio > 1, la série est divergente. Si ratio < 1 (cas ServiceNow à NRR ~108%, WACC 10%), les deux méthodes convergent." },
-            { title: "Composantes de l'EV", body: "(1) NPV Base existante — gross profit actualisé sur l'horizon. (2) PV Terminal Value — FCF normalisé × multiple. (3) NPV Nouveaux logos — valeur du moteur d'acquisition. La somme moins SBC plus cash donne l'Equity Value." },
+            { title: "Composantes de l'EV", body: "(1) NPV Base existante — gross profit actualisé sur l'horizon. (2) PV Terminal Value — FCF normalisé × multiple. (3) NPV Nouveaux logos — valeur du moteur d'acquisition." },
             { title: 'Hypothèses critiques', body: 'NRR initial et WACC déterminent 80% de la valeur. Le NRR terminal conditionne la Terminal Value. Le multiple FCF terminal (22-28x pour un SaaS mature) détermine la seconde composante.' },
           ].map((s, i) => (
             <div key={i} style={{ marginBottom: 28 }}>
