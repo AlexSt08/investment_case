@@ -33,11 +33,14 @@ export interface FinancialsResponse {
   period:             string
 }
 
+interface EarningsDates {
+  lastEarningsDate: string | null
+  nextEarningsDate: string | null
+  earningsQuality:  'confirmed' | 'estimated' | 'unknown'
+}
+
 // ── Type de refresh nécessaire ────────────────────────────────────────────
-type RefreshType =
-  | 'none'         // Cache valide → 0 appel FMP
-  | 'dates_only'   // Earnings passées, finances déjà à jour → 1 appel FMP
-  | 'full'         // Refresh complet → 5 appels FMP
+type RefreshType = 'none' | 'dates_only' | 'full'
 
 function getRefreshType(cached: any | null): RefreshType {
   if (!cached) return 'full'
@@ -47,33 +50,30 @@ function getRefreshType(cached: any | null): RefreshType {
   const nextEarnings = cached.next_earnings_date ? new Date(cached.next_earnings_date).getTime() : null
   const lastEarnings = cached.last_earnings_date ? new Date(cached.last_earnings_date).getTime() : null
 
-  // Pas de date d'earnings connue → on ne sait pas quand rafraîchir → refresh complet
   if (!nextEarnings) return 'full'
 
-  const msToNext = nextEarnings - now  // négatif si dépassée
+  const msToNext = nextEarnings - now
   const inWindow = Math.abs(msToNext) <= WINDOW_MS
 
-  // ── Dans la fenêtre ±5j autour de la prochaine publication
   if (inWindow) {
     return (now - fetchedAt) > TTL_24H ? 'full' : 'none'
   }
 
-  // ── La prochaine date est dans le futur (hors fenêtre)
   if (msToNext > WINDOW_MS) {
-    // Données fraîches si fetchedAt est postérieur à la dernière publication
     const freshAfterLastEarnings = !lastEarnings || fetchedAt > lastEarnings
     return freshAfterLastEarnings ? 'none' : 'full'
   }
 
-  // ── La date de prochaine publication est dépassée
-  // msToNext < -WINDOW_MS : on est bien après la publication
-  if (fetchedAt > nextEarnings) {
-    // Finances déjà rafraîchies post-earnings → juste mettre à jour les dates
-    return 'dates_only'
-  }
-
-  // Finances pas encore rafraîchies après la publication → refresh complet
+  // next_earnings_date dépassée
+  if (fetchedAt > nextEarnings) return 'dates_only'
   return 'full'
+}
+
+// ── Indique si next_earnings_date est encore valide (non dépassée) ─────────
+// Quand c'est le cas, inutile d'appeler /earnings même dans un full refresh
+function hasValidFutureEarningsDate(cached: any | null): boolean {
+  if (!cached?.next_earnings_date) return false
+  return new Date(cached.next_earnings_date).getTime() > Date.now()
 }
 
 // ── FMP helpers ───────────────────────────────────────────────────────────
@@ -98,34 +98,22 @@ function firstItem(data: any): any {
 }
 
 // ── Parse earnings depuis /stable/earnings ────────────────────────────────
-function parseEarnings(data: any[]): {
-  lastEarningsDate: string | null
-  nextEarningsDate: string | null
-  earningsQuality:  'confirmed' | 'estimated' | 'unknown'
-} {
+function parseEarnings(data: any[]): EarningsDates {
   if (!Array.isArray(data) || data.length === 0) {
     return { lastEarningsDate: null, nextEarningsDate: null, earningsQuality: 'unknown' }
   }
-
   const now    = new Date()
-  // Trier du plus récent au plus ancien (déjà le cas mais on s'en assure)
   const sorted = [...data].sort((a, b) =>
     new Date(b.date).getTime() - new Date(a.date).getTime()
   )
-
-  // Prochaine publication : epsActual === null ET date future
   const next = sorted.find(e => e.epsActual === null && new Date(e.date) > now)
-
-  // Dernière publication : epsActual !== null ET date passée
   const last = sorted.find(e => e.epsActual !== null && new Date(e.date) <= now)
 
-  // Qualité : "confirmed" si lastUpdated récent (< 30j)
   let earningsQuality: 'confirmed' | 'estimated' | 'unknown' = 'unknown'
   if (next?.lastUpdated) {
     const ageDays = (now.getTime() - new Date(next.lastUpdated).getTime()) / (1000 * 60 * 60 * 24)
     earningsQuality = ageDays < 30 ? 'confirmed' : 'estimated'
   }
-
   return {
     lastEarningsDate: last?.date ?? null,
     nextEarningsDate: next?.date ?? null,
@@ -133,16 +121,14 @@ function parseEarnings(data: any[]): {
   }
 }
 
-// ── Fetch complet depuis FMP stable ───────────────────────────────────────
-async function fetchFullFromFMP(ticker: string, apiKey: string): Promise<FinancialsResponse> {
+// ── Fetch financières (4 appels) — sans earnings ──────────────────────────
+async function fetchFinancialsOnly(ticker: string, apiKey: string) {
   const t = ticker.toUpperCase()
-
-  const [profile, income, cashflow, balance, earningsRaw] = await Promise.all([
+  const [profile, income, cashflow, balance] = await Promise.all([
     fmpGet(`/profile?symbol=${t}`,                         apiKey).catch(() => null),
     fmpGet(`/income-statement?symbol=${t}&limit=1`,        apiKey).catch(() => null),
     fmpGet(`/cash-flow-statement?symbol=${t}&limit=1`,     apiKey).catch(() => null),
     fmpGet(`/balance-sheet-statement?symbol=${t}&limit=1`, apiKey).catch(() => null),
-    fmpGet(`/earnings?symbol=${t}&limit=5`,                apiKey).catch(() => null),
   ])
 
   if (isFmpError(profile)) {
@@ -156,40 +142,46 @@ async function fetchFullFromFMP(ticker: string, apiKey: string): Promise<Financi
   const c = isFmpError(cashflow)  ? null : firstItem(cashflow)
   const b = isFmpError(balance)   ? null : firstItem(balance)
 
-  const revenueTTM  = i?.revenue    ? i.revenue / 1e9    : 0
-  const grossMargin = i?.revenue    ? (i.grossProfit  ?? 0) / i.revenue : 0
+  return { p, i, c, b }
+}
+
+// ── Fetch earnings uniquement (1 appel) ───────────────────────────────────
+async function fetchEarningsOnly(ticker: string, apiKey: string): Promise<EarningsDates> {
+  const raw = await fmpGet(`/earnings?symbol=${ticker}&limit=5`, apiKey)
+  return parseEarnings(Array.isArray(raw) ? raw : [])
+}
+
+// ── Assemble FinancialsResponse ───────────────────────────────────────────
+function buildResponse(
+  ticker: string,
+  { p, i, c, b }: { p: any; i: any; c: any; b: any },
+  earnings: EarningsDates
+): FinancialsResponse {
+  const revenueTTM  = i?.revenue    ? i.revenue / 1e9 : 0
+  const grossMargin = i?.revenue    ? (i.grossProfit ?? 0) / i.revenue : 0
   const fcfMargin   = i?.revenue && c?.freeCashFlow ? c.freeCashFlow / i.revenue : 0
   const mktCap      = (p?.mktCap   ?? 0) / 1e9
   const cash        = b?.cashAndCashEquivalents ?? 0
   const debt        = b?.totalDebt  ?? 0
   const netCash     = (cash - debt) / 1e9
   const sbc         = c?.stockBasedCompensation ? Math.abs(c.stockBasedCompensation) / 1e9 : 0
-  const nrr         = getStaticNrr(t)
-
-  const earnings = parseEarnings(Array.isArray(earningsRaw) ? earningsRaw : [])
 
   return {
-    ticker:           t,
-    companyName:      p?.companyName ?? p?.name ?? t,
-    revenueTTM:       parseFloat(revenueTTM.toFixed(2)),
-    grossMargin:      parseFloat(grossMargin.toFixed(3)),
-    fcfMargin:        parseFloat(Math.max(0, fcfMargin).toFixed(3)),
-    mktCap:           parseFloat(mktCap.toFixed(1)),
-    netCash:          parseFloat(netCash.toFixed(1)),
-    sbc:              parseFloat(sbc.toFixed(1)),
-    nrr,
+    ticker,
+    companyName:  p?.companyName ?? p?.name ?? ticker,
+    revenueTTM:   parseFloat(revenueTTM.toFixed(2)),
+    grossMargin:  parseFloat(grossMargin.toFixed(3)),
+    fcfMargin:    parseFloat(Math.max(0, fcfMargin).toFixed(3)),
+    mktCap:       parseFloat(mktCap.toFixed(1)),
+    netCash:      parseFloat(netCash.toFixed(1)),
+    sbc:          parseFloat(sbc.toFixed(1)),
+    nrr:          getStaticNrr(ticker),
     ...earnings,
-    cacheStatus:      'fmp',
-    cacheLabel:       '',
-    source:           'fmp',
-    period:           i?.date ?? new Date().toISOString().split('T')[0],
+    cacheStatus:  'fmp',
+    cacheLabel:   '',
+    source:       'fmp',
+    period:       i?.date ?? new Date().toISOString().split('T')[0],
   }
-}
-
-// ── Fetch dates uniquement (1 appel) ─────────────────────────────────────
-async function fetchEarningsDatesOnly(ticker: string, apiKey: string) {
-  const earningsRaw = await fmpGet(`/earnings?symbol=${ticker}&limit=5`, apiKey)
-  return parseEarnings(Array.isArray(earningsRaw) ? earningsRaw : [])
 }
 
 // ── Upsert Supabase ───────────────────────────────────────────────────────
@@ -243,17 +235,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
   }
 
-  // ── Layer 2 : cache Supabase avec refresh intelligent ─────────────────
+  // ── Layer 2 : cache Supabase ──────────────────────────────────────────
   const { data: cached } = await supabase
     .from('ticker_cache').select('*').eq('ticker', ticker).single()
 
   const refreshType = force ? 'full' : getRefreshType(cached)
 
-  // ── Cache valide → 0 appel FMP
+  // ── none : 0 appel FMP
   if (refreshType === 'none' && cached) {
     const nextDate = cached.next_earnings_date ? new Date(cached.next_earnings_date) : null
     const lastDate = cached.last_earnings_date ? new Date(cached.last_earnings_date) : null
-    const label = getCacheLabel(
+    const label    = getCacheLabel(
       { fetchedAt: new Date(cached.fetched_at), lastEarningsDate: lastDate, nextEarningsDate: nextDate, earningsQuality: cached.earnings_date_quality ?? 'unknown' },
       'fresh'
     )
@@ -273,44 +265,58 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   // ── Layer 3 : appels FMP ──────────────────────────────────────────────
   const apiKey = process.env.FMP_API_KEY
   if (!apiKey) {
-    return res.status(500).json({ error: 'FMP_API_KEY manquante dans les variables d\'environnement' })
+    return res.status(500).json({ error: "FMP_API_KEY manquante dans les variables d'environnement" })
   }
 
   try {
-    // ── dates_only : 1 appel → juste mettre à jour next/last earnings
-    if (refreshType === 'dates_only' && cached) {
-      const dates = await fetchEarningsDatesOnly(ticker, apiKey)
 
+    // ── dates_only : 1 appel earnings — finances intactes
+    if (refreshType === 'dates_only' && cached) {
+      const dates = await fetchEarningsOnly(ticker, apiKey)
       await supabase.from('ticker_cache').update({
         last_earnings_date:    dates.lastEarningsDate,
         next_earnings_date:    dates.nextEarningsDate,
         earnings_date_quality: dates.earningsQuality,
         fetched_at:            new Date().toISOString(),
       }).eq('ticker', ticker)
-
       return res.status(200).json({
         ...cached.data,
         ticker,
-        companyName:      cached.company_name,
+        companyName:  cached.company_name,
         ...dates,
-        cacheStatus:      'dates_refreshed',
-        cacheLabel:       `Dates earnings mises à jour · prochaine publication : ${dates.nextEarningsDate ?? 'inconnue'}`,
-        source:           'cache' as const,
+        cacheStatus:  'dates_refreshed',
+        cacheLabel:   `Dates mises à jour · prochains résultats : ${dates.nextEarningsDate ?? 'inconnu'}`,
+        source:       'cache' as const,
       })
     }
 
-    // ── full : 5 appels → refresh complet
-    const fmpData = await fetchFullFromFMP(ticker, apiKey)
+    // ── full : refresh financier obligatoire
+    // Earnings : appelé SEULEMENT si next_earnings_date est dépassée ou inconnue
+    // Si la date future est encore valide → on la réutilise depuis le cache (0 appel earnings)
+    const earningsDatesValid = !force && hasValidFutureEarningsDate(cached)
+
+    const financials = await fetchFinancialsOnly(ticker, apiKey)
+
+    const earnings: EarningsDates = earningsDatesValid
+      ? {
+          lastEarningsDate: cached.last_earnings_date,
+          nextEarningsDate: cached.next_earnings_date,
+          earningsQuality:  cached.earnings_date_quality ?? 'unknown',
+        }
+      : await fetchEarningsOnly(ticker, apiKey)  // 1 appel supplémentaire si nécessaire
+
+    const fmpData = buildResponse(ticker, financials, earnings)
     await upsertCache(ticker, fmpData)
 
     const daysToNext = fmpData.nextEarningsDate
       ? Math.round((new Date(fmpData.nextEarningsDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
       : null
 
+    const earningsNote = earningsDatesValid ? ' · dates earnings inchangées' : ''
     return res.status(200).json({
       ...fmpData,
       cacheStatus: 'fmp',
-      cacheLabel:  `FMP · ${new Date().toLocaleDateString('fr-FR')}${daysToNext !== null ? ` · Prochains résultats dans ${daysToNext}j` : ''}`,
+      cacheLabel:  `FMP · ${new Date().toLocaleDateString('fr-FR')}${daysToNext !== null ? ` · Résultats dans ${daysToNext}j` : ''}${earningsNote}`,
     })
 
   } catch (err) {
