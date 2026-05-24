@@ -6,7 +6,7 @@ import { getCacheStatus, shouldRefresh, getCacheLabel, type CacheEntry } from '.
 // ── Supabase admin client (server-side only) ──────────────────────────────
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SECRET_KEY!
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
 const FMP_BASE = 'https://financialmodelingprep.com/api/v3'
@@ -33,7 +33,6 @@ export interface FinancialsResponse {
 
 // ── FMP helpers ───────────────────────────────────────────────────────────
 
-// Détecte si FMP a retourné un objet erreur au lieu des données
 function isFmpError(data: any): boolean {
   return !Array.isArray(data) || data.length === 0 ||
     (data[0] && typeof data[0] === 'object' && 'Error Message' in data[0])
@@ -54,12 +53,11 @@ async function fmpGet(path: string, apiKey: string): Promise<any> {
 async function fetchFromFMP(ticker: string, apiKey: string): Promise<FinancialsResponse> {
   const t = ticker.toUpperCase()
 
-  // ── Étape 1 : profil — seul endpoint obligatoire pour valider le ticker
+  // Étape 1 : profil — seul endpoint obligatoire pour valider le ticker
   const profile = await fmpGet(`/profile/${t}`, apiKey)
 
   if (isFmpError(profile)) {
     const msg = getFmpErrorMessage(profile)
-    // "Limit Reach" = quota dépassé, pas un ticker invalide
     if (msg.toLowerCase().includes('limit')) {
       throw new Error(`Quota FMP atteint (250 req/jour sur le free tier). Réessayez demain ou passez en plan payant.`)
     }
@@ -68,7 +66,7 @@ async function fetchFromFMP(ticker: string, apiKey: string): Promise<FinancialsR
 
   const p = profile[0]
 
-  // ── Étape 2 : états financiers — en parallèle, avec fallback si indispo
+  // Étape 2 : états financiers — en parallèle, avec fallback si indispo
   const [income, cashflow, balance, earnings] = await Promise.all([
     fmpGet(`/income-statement/${t}`, apiKey).catch(() => null),
     fmpGet(`/cash-flow-statement/${t}`, apiKey).catch(() => null),
@@ -76,7 +74,6 @@ async function fetchFromFMP(ticker: string, apiKey: string): Promise<FinancialsR
     fmpGet(`/earning_calendar/${t}`, apiKey).catch(() => null),
   ])
 
-  // Statements disponibles ?
   const hasIncome   = !isFmpError(income)
   const hasCashflow = !isFmpError(cashflow)
   const hasBalance  = !isFmpError(balance)
@@ -85,44 +82,35 @@ async function fetchFromFMP(ticker: string, apiKey: string): Promise<FinancialsR
   const c = hasCashflow ? cashflow[0] : null
   const b = hasBalance  ? balance[0]  : null
 
-  // ── Calculs — avec fallbacks si données partielles
-  const revenueTTM  = i?.revenue    ? i.revenue / 1e9              : 0
-  const grossMargin = i?.revenue    ? (i.grossProfit ?? 0) / i.revenue : 0
-  const fcfMargin   = i?.revenue && c?.freeCashFlow
-                      ? c.freeCashFlow / i.revenue                  : 0
+  const revenueTTM  = i?.revenue ? i.revenue / 1e9 : 0
+  const grossMargin = i?.revenue ? (i.grossProfit ?? 0) / i.revenue : 0
+  const fcfMargin   = i?.revenue && c?.freeCashFlow ? c.freeCashFlow / i.revenue : 0
   const mktCap      = (p.mktCap ?? 0) / 1e9
   const cash        = b?.cashAndCashEquivalents ?? 0
   const debt        = b?.totalDebt ?? 0
   const netCash     = (cash - debt) / 1e9
-  const sbc         = c?.stockBasedCompensation
-                      ? Math.abs(c.stockBasedCompensation) / 1e9   : 0
+  const sbc         = c?.stockBasedCompensation ? Math.abs(c.stockBasedCompensation) / 1e9 : 0
   const nrr         = getStaticNrr(t)
 
-  // ── Earnings calendar
   let lastEarningsDate: string | null = null
   let nextEarningsDate: string | null = null
   let earningsQuality: 'confirmed' | 'estimated' | 'unknown' = 'unknown'
 
   if (Array.isArray(earnings) && earnings.length > 0) {
     const now    = new Date()
-    const past   = earnings
-      .filter((e: any) => e.date && new Date(e.date) <= now)
+    const past   = earnings.filter((e: any) => e.date && new Date(e.date) <= now)
       .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())
-    const future = earnings
-      .filter((e: any) => e.date && new Date(e.date) > now)
+    const future = earnings.filter((e: any) => e.date && new Date(e.date) > now)
       .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime())
-
     if (past[0])   lastEarningsDate = past[0].date
     if (future[0]) {
       nextEarningsDate = future[0].date
-      earningsQuality  = future[0].time === 'amc' || future[0].time === 'bmo'
-        ? 'confirmed' : 'estimated'
+      earningsQuality  = future[0].time === 'amc' || future[0].time === 'bmo' ? 'confirmed' : 'estimated'
     }
   }
 
-  // ── Warning si données partielles
   const partialNote = !hasIncome
-    ? ' · Résultats financiers indisponibles sur le free tier FMP (profil uniquement)'
+    ? ' · États financiers indisponibles sur le free tier FMP (profil uniquement)'
     : ''
 
   return {
@@ -156,7 +144,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ error: 'Ticker invalide (1-6 lettres majuscules)' })
   }
 
-  // ── Layer 1 : données statiques pré-validées ──────────────────────────
+  // Layer 1 : données statiques pré-validées
   if (!force) {
     const staticData = getStaticData(ticker)
     if (staticData) {
@@ -173,7 +161,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
   }
 
-  // ── Layer 2 : cache Supabase ──────────────────────────────────────────
+  // Layer 2 : cache Supabase
   if (!force) {
     const { data: cached } = await supabase
       .from('ticker_cache')
@@ -189,7 +177,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         earningsQuality:  cached.earnings_date_quality ?? 'unknown',
       }
       const status = getCacheStatus(entry)
-
       if (!shouldRefresh(status)) {
         return res.status(200).json({
           ...cached.data,
@@ -206,7 +193,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
   }
 
-  // ── Layer 3 : appel FMP ───────────────────────────────────────────────
+  // Layer 3 : appel FMP
   const apiKey = process.env.FMP_API_KEY
   if (!apiKey) {
     return res.status(500).json({ error: 'FMP_API_KEY manquante dans les variables d\'environnement' })
@@ -215,7 +202,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     const fmpData = await fetchFromFMP(ticker, apiKey)
 
-    // Upsert dans Supabase (même si données partielles — on cache ce qu'on a)
     await supabase.from('ticker_cache').upsert({
       ticker,
       company_name:          fmpData.companyName,
@@ -241,7 +227,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       cacheLabel: `Données FMP · ${new Date().toLocaleDateString('fr-FR')}${fmpData.cacheLabel}`,
     })
   } catch (err) {
-    // Distingue les erreurs connues des erreurs inattendues
     const msg = String(err).replace('Error: ', '')
     const isKnown = msg.includes('introuvable') || msg.includes('Quota') || msg.includes('HTTP')
     return res.status(isKnown ? 404 : 500).json({ error: msg })
