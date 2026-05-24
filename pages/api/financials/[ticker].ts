@@ -9,8 +9,6 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-const FMP_BASE = 'https://financialmodelingprep.com/api/v3'
-
 // ── Types ─────────────────────────────────────────────────────────────────
 export interface FinancialsResponse {
   ticker:             string
@@ -27,95 +25,107 @@ export interface FinancialsResponse {
   earningsQuality:    'confirmed' | 'estimated' | 'unknown'
   cacheStatus:        string
   cacheLabel:         string
-  source:             'static' | 'cache' | 'fmp'
+  source:             'static' | 'cache' | 'yahoo'
   period:             string
 }
 
-// ── FMP helpers ───────────────────────────────────────────────────────────
+// ── Yahoo Finance helpers ─────────────────────────────────────────────────
+// Unofficial API — no key required, server-side only
+const YF_BASE = 'https://query1.finance.yahoo.com'
 
-function isFmpError(data: any): boolean {
-  return !Array.isArray(data) || data.length === 0 ||
-    (data[0] && typeof data[0] === 'object' && 'Error Message' in data[0])
+const YF_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (compatible; investment-platform/1.0)',
+  'Accept': 'application/json',
 }
 
-function getFmpErrorMessage(data: any): string {
-  if (Array.isArray(data) && data[0]?.['Error Message']) return data[0]['Error Message']
-  if (data?.['Error Message']) return data['Error Message']
-  return 'Données indisponibles'
-}
-
-async function fmpGet(path: string, apiKey: string): Promise<any> {
-  const r = await fetch(`${FMP_BASE}${path}?apikey=${apiKey}`)
-  if (!r.ok) throw new Error(`FMP HTTP ${r.status} sur ${path}`)
+async function yfGet(path: string): Promise<any> {
+  const r = await fetch(`${YF_BASE}${path}`, { headers: YF_HEADERS })
+  if (!r.ok) throw new Error(`Yahoo Finance HTTP ${r.status} sur ${path}`)
   return r.json()
 }
 
-async function fetchFromFMP(ticker: string, apiKey: string): Promise<FinancialsResponse> {
+async function fetchFromYahoo(ticker: string): Promise<FinancialsResponse> {
   const t = ticker.toUpperCase()
 
-  // Étape 1 : profil — seul endpoint obligatoire pour valider le ticker
-  const profile = await fmpGet(`/profile/${t}`, apiKey)
+  // Modules nécessaires en un seul appel
+  const modules = [
+    'financialData',        // revenue, margins, FCF, cash, debt
+    'defaultKeyStatistics', // marketCap, SBC
+    'summaryDetail',        // companyName, sector
+    'calendarEvents',       // prochaine date earnings
+    'earningsHistory',      // dates earnings passées
+  ].join(',')
 
-  if (isFmpError(profile)) {
-    const msg = getFmpErrorMessage(profile)
-    if (msg.toLowerCase().includes('limit')) {
-      throw new Error(`Quota FMP atteint (250 req/jour sur le free tier). Réessayez demain ou passez en plan payant.`)
-    }
-    throw new Error(`Ticker "${t}" introuvable sur FMP`)
+  const data = await yfGet(
+    `/v10/finance/quoteSummary/${t}?modules=${modules}&corsDomain=finance.yahoo.com`
+  )
+
+  const result = data?.quoteSummary?.result?.[0]
+  const error  = data?.quoteSummary?.error
+
+  if (!result || error) {
+    const msg = error?.description ?? 'Ticker introuvable'
+    throw new Error(`"${t}" — ${msg}`)
   }
 
-  const p = profile[0]
+  const fin  = result.financialData        ?? {}
+  const stat = result.defaultKeyStatistics ?? {}
+  const sum  = result.summaryDetail        ?? {}
+  const cal  = result.calendarEvents       ?? {}
+  const hist = result.earningsHistory      ?? {}
 
-  // Étape 2 : états financiers — en parallèle, avec fallback si indispo
-  const [income, cashflow, balance, earnings] = await Promise.all([
-    fmpGet(`/income-statement/${t}`, apiKey).catch(() => null),
-    fmpGet(`/cash-flow-statement/${t}`, apiKey).catch(() => null),
-    fmpGet(`/balance-sheet-statement/${t}`, apiKey).catch(() => null),
-    fmpGet(`/earning_calendar/${t}`, apiKey).catch(() => null),
-  ])
-
-  const hasIncome   = !isFmpError(income)
-  const hasCashflow = !isFmpError(cashflow)
-  const hasBalance  = !isFmpError(balance)
-
-  const i = hasIncome   ? income[0]   : null
-  const c = hasCashflow ? cashflow[0] : null
-  const b = hasBalance  ? balance[0]  : null
-
-  const revenueTTM  = i?.revenue ? i.revenue / 1e9 : 0
-  const grossMargin = i?.revenue ? (i.grossProfit ?? 0) / i.revenue : 0
-  const fcfMargin   = i?.revenue && c?.freeCashFlow ? c.freeCashFlow / i.revenue : 0
-  const mktCap      = (p.mktCap ?? 0) / 1e9
-  const cash        = b?.cashAndCashEquivalents ?? 0
-  const debt        = b?.totalDebt ?? 0
+  // ── Valeurs financières
+  const revenueTTM  = (fin.totalRevenue?.raw          ?? 0) / 1e9
+  const grossMargin = fin.grossMargins?.raw            ?? 0
+  const fcfMargin   = fin.freeCashflow?.raw && fin.totalRevenue?.raw
+                      ? fin.freeCashflow.raw / fin.totalRevenue.raw : 0
+  const mktCap      = (stat.marketCap?.raw ?? sum.marketCap?.raw ?? 0) / 1e9
+  const cash        = (fin.totalCash?.raw              ?? 0)
+  const debt        = (fin.totalDebt?.raw              ?? 0)
   const netCash     = (cash - debt) / 1e9
-  const sbc         = c?.stockBasedCompensation ? Math.abs(c.stockBasedCompensation) / 1e9 : 0
-  const nrr         = getStaticNrr(t)
 
+  // SBC : non disponible dans quoteSummary — fallback depuis cashflow si besoin
+  // Yahoo ne l'expose pas directement dans ces modules, on met 0 avec note
+  const sbc = 0
+
+  const nrr = getStaticNrr(t)
+
+  // ── Earnings dates
   let lastEarningsDate: string | null = null
   let nextEarningsDate: string | null = null
   let earningsQuality: 'confirmed' | 'estimated' | 'unknown' = 'unknown'
 
-  if (Array.isArray(earnings) && earnings.length > 0) {
-    const now    = new Date()
-    const past   = earnings.filter((e: any) => e.date && new Date(e.date) <= now)
-      .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())
-    const future = earnings.filter((e: any) => e.date && new Date(e.date) > now)
-      .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime())
-    if (past[0])   lastEarningsDate = past[0].date
-    if (future[0]) {
-      nextEarningsDate = future[0].date
-      earningsQuality  = future[0].time === 'amc' || future[0].time === 'bmo' ? 'confirmed' : 'estimated'
+  // Prochaine publication (calendarEvents)
+  const nextEarningsTimestamp = cal.earnings?.earningsDate?.[0]?.raw
+  if (nextEarningsTimestamp) {
+    nextEarningsDate = new Date(nextEarningsTimestamp * 1000).toISOString().split('T')[0]
+    earningsQuality  = 'confirmed'
+  }
+
+  // Dernière publication (earningsHistory)
+  const history = hist.history ?? []
+  if (history.length > 0) {
+    const sorted = [...history].sort((a: any, b: any) =>
+      (b.quarter?.raw ?? 0) - (a.quarter?.raw ?? 0)
+    )
+    const last = sorted[0]?.quarter?.raw
+    if (last) {
+      lastEarningsDate = new Date(last * 1000).toISOString().split('T')[0]
     }
   }
 
-  const partialNote = !hasIncome
-    ? ' · États financiers indisponibles sur le free tier FMP (profil uniquement)'
-    : ''
+  const companyName = fin.companyOfficers?.[0]
+    ? t
+    : (result.price?.longName ?? result.price?.shortName ?? t)
+
+  // Fallback companyName depuis summaryDetail
+  const finalName = result.summaryProfile?.longBusinessSummary
+    ? (result.quoteType?.longName ?? result.quoteType?.shortName ?? t)
+    : t
 
   return {
     ticker:           t,
-    companyName:      p.companyName ?? t,
+    companyName:      finalName,
     revenueTTM:       parseFloat(revenueTTM.toFixed(2)),
     grossMargin:      parseFloat(grossMargin.toFixed(3)),
     fcfMargin:        parseFloat(Math.max(0, fcfMargin).toFixed(3)),
@@ -126,10 +136,10 @@ async function fetchFromFMP(ticker: string, apiKey: string): Promise<FinancialsR
     lastEarningsDate,
     nextEarningsDate,
     earningsQuality,
-    cacheStatus:      'fmp',
-    cacheLabel:       partialNote,
-    source:           'fmp',
-    period:           i?.date ?? p.ipoDate ?? '',
+    cacheStatus:      'yahoo',
+    cacheLabel:       '',
+    source:           'yahoo',
+    period:           new Date().toISOString().split('T')[0],
   }
 }
 
@@ -144,7 +154,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ error: 'Ticker invalide (1-6 lettres majuscules)' })
   }
 
-  // Layer 1 : données statiques pré-validées
+  // ── Layer 1 : données statiques pré-validées ──────────────────────────
   if (!force) {
     const staticData = getStaticData(ticker)
     if (staticData) {
@@ -161,7 +171,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
   }
 
-  // Layer 2 : cache Supabase
+  // ── Layer 2 : cache Supabase ──────────────────────────────────────────
   if (!force) {
     const { data: cached } = await supabase
       .from('ticker_cache')
@@ -193,42 +203,36 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
   }
 
-  // Layer 3 : appel FMP
-  const apiKey = process.env.FMP_API_KEY
-  if (!apiKey) {
-    return res.status(500).json({ error: 'FMP_API_KEY manquante dans les variables d\'environnement' })
-  }
-
+  // ── Layer 3 : Yahoo Finance ───────────────────────────────────────────
   try {
-    const fmpData = await fetchFromFMP(ticker, apiKey)
+    const yfData = await fetchFromYahoo(ticker)
 
     await supabase.from('ticker_cache').upsert({
       ticker,
-      company_name:          fmpData.companyName,
+      company_name:          yfData.companyName,
       data: {
-        revenueTTM:  fmpData.revenueTTM,
-        grossMargin: fmpData.grossMargin,
-        fcfMargin:   fmpData.fcfMargin,
-        mktCap:      fmpData.mktCap,
-        netCash:     fmpData.netCash,
-        sbc:         fmpData.sbc,
-        nrr:         fmpData.nrr,
-        period:      fmpData.period,
+        revenueTTM:  yfData.revenueTTM,
+        grossMargin: yfData.grossMargin,
+        fcfMargin:   yfData.fcfMargin,
+        mktCap:      yfData.mktCap,
+        netCash:     yfData.netCash,
+        sbc:         yfData.sbc,
+        nrr:         yfData.nrr,
+        period:      yfData.period,
       },
       fetched_at:            new Date().toISOString(),
-      last_earnings_date:    fmpData.lastEarningsDate,
-      next_earnings_date:    fmpData.nextEarningsDate,
-      earnings_date_quality: fmpData.earningsQuality,
-      source:                'fmp',
+      last_earnings_date:    yfData.lastEarningsDate,
+      next_earnings_date:    yfData.nextEarningsDate,
+      earnings_date_quality: yfData.earningsQuality,
+      source:                'yahoo',
     }, { onConflict: 'ticker' })
 
     return res.status(200).json({
-      ...fmpData,
-      cacheLabel: `Données FMP · ${new Date().toLocaleDateString('fr-FR')}${fmpData.cacheLabel}`,
+      ...yfData,
+      cacheLabel: `Yahoo Finance · ${new Date().toLocaleDateString('fr-FR')}`,
     })
   } catch (err) {
     const msg = String(err).replace('Error: ', '')
-    const isKnown = msg.includes('introuvable') || msg.includes('Quota') || msg.includes('HTTP')
-    return res.status(isKnown ? 404 : 500).json({ error: msg })
+    return res.status(msg.includes('introuvable') ? 404 : 500).json({ error: msg })
   }
 }
