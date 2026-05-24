@@ -63,21 +63,181 @@ function compute(p: Params): Results {
   return { rows, sumPV, pvTV, tvGross, revenueY10, evCohort, equityImplied, upside }
 }
 
-// ── Sparkline ─────────────────────────────────────────────────────────────
-function Sparkline({ values, color }: { values: number[]; color: string }) {
-  const max = Math.max(...values)
-  const min = Math.min(...values)
-  const range = max - min || 1
-  const W = 200; const H = 40; const PAD = 4
-  const pts = values.map((v, i) => {
-    const x = PAD + (i / (values.length - 1)) * (W - PAD * 2)
-    const y = PAD + (1 - (v - min) / range) * (H - PAD * 2)
-    return `${x},${y}`
-  }).join(' ')
+// ── NRR Trajectory Chart ──────────────────────────────────────────────────
+function NRRChart({ rows, wacc, nrrInit, nrrTerminal }: {
+  rows: CohortRow[]
+  wacc: number
+  nrrInit: number
+  nrrTerminal: number
+}) {
+  if (rows.length === 0) return null
+
+  // Layout
+  const VW = 400; const VH = 110
+  const PL = 38; const PR = 14; const PT = 12; const PB = 28
+  const plotW = VW - PL - PR
+  const plotH = VH - PT - PB
+
+  // Y scale — anchored at 100% (NRR floor), top = nrrInit + 4pt padding
+  const yMin = 100                              // plancher 100%
+  const yMax = Math.ceil(nrrInit * 100) + 4     // ex: 130 pour NRR 126%
+  const yRange = yMax - yMin
+
+  // WACC threshold line: NRR = 1 + WACC
+  const waccThresh = (1 + wacc) * 100           // ex: 110 pour WACC 10%
+
+  const toX = (i: number) => PL + (i / (rows.length - 1)) * plotW
+  const toY = (pct: number) => PT + (1 - (pct - yMin) / yRange) * plotH
+
+  // NRR line points
+  const nrrPcts = rows.map(r => r.nrr * 100)
+  const linePts = nrrPcts.map((v, i) => `${toX(i)},${toY(v)}`).join(' ')
+
+  // Fill area above threshold (green) — clip to WACC line at bottom
+  const threshY = toY(waccThresh)
+  const areaAbovePts = [
+    `${toX(0)},${threshY}`,
+    ...nrrPcts.map((v, i) => `${toX(i)},${Math.min(toY(v), threshY)}`),
+    `${toX(rows.length - 1)},${threshY}`,
+  ].join(' ')
+
+  // Fill area below threshold (red) — only if NRR crosses below WACC
+  const hasBelowZone = nrrPcts.some(v => v < waccThresh)
+  const areaBelowPts = hasBelowZone ? [
+    `${toX(0)},${threshY}`,
+    ...nrrPcts.map((v, i) => `${toX(i)},${Math.max(toY(v), threshY)}`),
+    `${toX(rows.length - 1)},${threshY}`,
+  ].join(' ') : ''
+
+  // Y-axis tick values
+  const yTicks = [100, Math.round((yMin + yMax) / 2), yMax]
+    .filter((v, i, a) => a.indexOf(v) === i && v >= yMin && v <= yMax)
+
+  // X-axis labels: Y1, mid, last
+  const midIdx = Math.floor((rows.length - 1) / 2)
+  const xLabels = [
+    { i: 0,               label: `Y1` },
+    { i: midIdx,          label: `Y${rows.midIdx ?? midIdx + 1}` },
+    { i: rows.length - 1, label: `Y${rows.length}` },
+  ]
+
+  // Key point labels on the line (Y1, mid, last)
+  const labelPoints = [0, midIdx, rows.length - 1]
+
   return (
-    <svg width={W} height={H} style={{ overflow: 'visible' }}>
-      <polyline points={pts} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
-      <polyline points={`${PAD},${H} ${pts} ${W - PAD},${H}`} fill={color} fillOpacity={0.08} stroke="none" />
+    <svg
+      viewBox={`0 0 ${VW} ${VH}`}
+      width="100%"
+      style={{ display: 'block', overflow: 'visible' }}
+      aria-label="Trajectoire NRR — déclin linéaire vers maturité"
+    >
+      {/* ── Grid lines ── */}
+      {yTicks.map(v => (
+        <line
+          key={v}
+          x1={PL} x2={VW - PR}
+          y1={toY(v)} y2={toY(v)}
+          stroke="#E0D8CC" strokeWidth={0.5} strokeDasharray={v === 100 ? '0' : '2,3'}
+        />
+      ))}
+
+      {/* ── Zone verte : NRR > WACC ── */}
+      <polygon
+        points={areaAbovePts}
+        fill="#007a3d" fillOpacity={0.07}
+      />
+
+      {/* ── Zone rouge : NRR < WACC ── */}
+      {hasBelowZone && areaBelowPts && (
+        <polygon
+          points={areaBelowPts}
+          fill="#cc0000" fillOpacity={0.07}
+        />
+      )}
+
+      {/* ── Ligne seuil WACC (NRR = 1+WACC) ── */}
+      <line
+        x1={PL} x2={VW - PR}
+        y1={threshY} y2={threshY}
+        stroke="#b06000" strokeWidth={1} strokeDasharray="4,3"
+      />
+      <text
+        x={VW - PR + 2} y={threshY + 3.5}
+        fontSize={7} fill="#b06000"
+        fontFamily="'Courier New', monospace"
+      >
+        {waccThresh.toFixed(0)}%
+      </text>
+      <text
+        x={PL + 3} y={threshY - 3}
+        fontSize={6.5} fill="#b06000"
+        fontFamily="'Courier New', monospace"
+        opacity={0.8}
+      >
+        NRR = WACC
+      </text>
+
+      {/* ── Courbe NRR ── */}
+      <polyline
+        points={linePts}
+        fill="none"
+        stroke="#0d7680" strokeWidth={2}
+        strokeLinejoin="round" strokeLinecap="round"
+      />
+
+      {/* ── Points et labels sur la courbe ── */}
+      {labelPoints.map(i => {
+        const x = toX(i)
+        const y = toY(nrrPcts[i])
+        const above = y > threshY  // below threshold visually = NRR < WACC
+        return (
+          <g key={i}>
+            <circle cx={x} cy={y} r={3} fill="#0d7680" />
+            <text
+              x={x}
+              y={y - 6}
+              textAnchor="middle"
+              fontSize={7.5}
+              fontWeight="600"
+              fill="#0d7680"
+              fontFamily="'Courier New', monospace"
+            >
+              {nrrPcts[i].toFixed(0)}%
+            </text>
+          </g>
+        )
+      })}
+
+      {/* ── Axe Y labels ── */}
+      {yTicks.map(v => (
+        <text
+          key={v}
+          x={PL - 3} y={toY(v) + 3.5}
+          textAnchor="end"
+          fontSize={7}
+          fill={v === 100 ? '#aaa' : '#888'}
+          fontFamily="'Courier New', monospace"
+        >
+          {v}%
+        </text>
+      ))}
+
+      {/* ── Axe X labels ── */}
+      {xLabels.map(({ i, label }) => (
+        <text
+          key={i}
+          x={toX(i)} y={VH - 4}
+          textAnchor="middle"
+          fontSize={7}
+          fill="#999"
+          fontFamily="'Courier New', monospace"
+        >
+          {i === 0 ? `Y1` : i === rows.length - 1 ? `Y${rows.length}` : `Y${i + 1}`}
+        </text>
+      ))}
+
+      {/* ── Bordure plot area ── */}
+      <line x1={PL} x2={PL} y1={PT} y2={VH - PB} stroke="#E0D8CC" strokeWidth={0.5} />
     </svg>
   )
 }
@@ -145,19 +305,18 @@ const DEFAULT_PARAMS: Params = {
 
 // ── Main Component ────────────────────────────────────────────────────────
 export default function CohortDCFModel() {
-  const [params, setParams]               = useState<Params>(DEFAULT_PARAMS)
-  const [activeTab, setActiveTab]         = useState<'model' | 'table' | 'method'>('model')
-  const [tickerInput, setTickerInput]     = useState('SNOW')
-  const [fetching, setFetching]           = useState(false)
-  const [fetchError, setFetchError]       = useState('')
-  const [fetchedData, setFetchedData]     = useState<FinancialsResponse | null>(null)
-  const [nrrMissing, setNrrMissing]       = useState(false)
-  const [companyName, setCompanyName]     = useState('Snowflake (SNOW)')
+  const [params, setParams]           = useState<Params>(DEFAULT_PARAMS)
+  const [activeTab, setActiveTab]     = useState<'model' | 'table' | 'method'>('model')
+  const [tickerInput, setTickerInput] = useState('SNOW')
+  const [fetching, setFetching]       = useState(false)
+  const [fetchError, setFetchError]   = useState('')
+  const [fetchedData, setFetchedData] = useState<FinancialsResponse | null>(null)
+  const [nrrMissing, setNrrMissing]   = useState(false)
+  const [companyName, setCompanyName] = useState('Snowflake (SNOW)')
 
   const res = compute(params)
   const set = useCallback((key: keyof Params) => (v: number) => setParams(p => ({ ...p, [key]: v })), [])
 
-  // ── Fetch ticker ────────────────────────────────────────────────────────
   const fetchTicker = async (force = false) => {
     const t = tickerInput.trim().toUpperCase()
     if (!t) return
@@ -167,7 +326,6 @@ export default function CohortDCFModel() {
       const r   = await fetch(url)
       const data: FinancialsResponse = await r.json()
       if (!r.ok) { setFetchError((data as any).error ?? 'Erreur inconnue'); return }
-
       setFetchedData(data)
       setCompanyName(`${data.companyName} (${t})`)
       setParams(p => ({
@@ -182,7 +340,7 @@ export default function CohortDCFModel() {
       }))
       if (!data.nrr) setNrrMissing(true)
     } catch {
-      setFetchError('Impossible de joindre l\'API')
+      setFetchError("Impossible de joindre l'API")
     } finally {
       setFetching(false)
     }
@@ -224,7 +382,7 @@ export default function CohortDCFModel() {
           {/* Controls */}
           <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 4, padding: '18px 20px' }}>
 
-            {/* ── Auto-remplissage ticker ── */}
+            {/* Auto-remplissage */}
             <div style={{ padding: '12px 14px', background: 'var(--bg)', border: '1px solid var(--border-rule)', borderRadius: 4, marginBottom: 16 }}>
               <p style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', letterSpacing: '0.12em', color: 'var(--text-muted)', textTransform: 'uppercase' as const, marginBottom: 8 }}>
                 Auto-remplissage
@@ -241,14 +399,8 @@ export default function CohortDCFModel() {
                   {fetching ? '…' : '↓ Charger'}
                 </button>
               </div>
-
-              {/* Feedback */}
               {fetchedData && !fetchError && (
-                <CacheBadge
-                  status={fetchedData.cacheStatus}
-                  label={fetchedData.cacheLabel}
-                  quality={fetchedData.earningsQuality}
-                />
+                <CacheBadge status={fetchedData.cacheStatus} label={fetchedData.cacheLabel} quality={fetchedData.earningsQuality} />
               )}
               {fetchedData && fetchedData.cacheStatus === 'fresh' && (
                 <button onClick={() => fetchTicker(true)} style={{ marginTop: 6, width: '100%', padding: '4px 0', fontFamily: 'var(--font-sans)', fontSize: '0.68rem', color: 'var(--text-muted)', background: 'transparent', border: '1px dashed var(--border)', borderRadius: 2, cursor: 'pointer' }}>
@@ -267,7 +419,6 @@ export default function CohortDCFModel() {
               )}
             </div>
 
-            {/* Header société */}
             <p style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', letterSpacing: '0.12em', color: 'var(--text-muted)', textTransform: 'uppercase' as const, marginBottom: 14 }}>
               Hypothèses — {companyName}
             </p>
@@ -290,7 +441,8 @@ export default function CohortDCFModel() {
             <SliderRow label="Multiple FCF terminal" value={params.tvMultiple} min={10} max={40} step={1} format={v => `${v}x`} onChange={set('tvMultiple')} />
             <SliderRow label="NPV nouveaux logos ($B)" value={params.npvLogos} min={0} max={30} step={0.5} format={v => `$${v.toFixed(1)}B`} onChange={set('npvLogos')} />
 
-            <button onClick={() => { setParams(DEFAULT_PARAMS); setCompanyName('Snowflake (SNOW)'); setFetchedData(null); setTickerInput('SNOW') }}
+            <button
+              onClick={() => { setParams(DEFAULT_PARAMS); setCompanyName('Snowflake (SNOW)'); setFetchedData(null); setTickerInput('SNOW') }}
               style={{ marginTop: 16, width: '100%', padding: '7px 0', fontFamily: 'var(--font-sans)', fontSize: '0.72rem', letterSpacing: '0.06em', color: 'var(--text-muted)', background: 'transparent', border: '1px solid var(--border)', borderRadius: 2, cursor: 'pointer' }}
               onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-elevated)'; e.currentTarget.style.color = 'var(--text-primary)' }}
               onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)' }}>
@@ -325,16 +477,33 @@ export default function CohortDCFModel() {
               </div>
             </div>
 
-            {/* NRR decay */}
+            {/* ── NRR Trajectory Chart ── */}
             <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 4, padding: '18px 20px', marginBottom: 16 }}>
-              <p style={{ fontFamily: 'var(--font-sans)', fontSize: '0.68rem', letterSpacing: '0.1em', color: 'var(--text-muted)', textTransform: 'uppercase' as const, marginBottom: 10 }}>
-                Trajectoire NRR — déclin linéaire vers maturité
-              </p>
-              <Sparkline values={res.rows.map(r => r.nrr * 100)} color="#0d7680" />
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'var(--font-mono)', fontSize: '0.62rem', color: 'var(--text-muted)', marginTop: 4 }}>
-                <span>Y1: {(params.nrrInit * 100).toFixed(0)}%</span>
-                <span>Y{params.horizon}: {(params.nrrTerminal * 100).toFixed(0)}%</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
+                <p style={{ fontFamily: 'var(--font-sans)', fontSize: '0.68rem', letterSpacing: '0.1em', color: 'var(--text-muted)', textTransform: 'uppercase' as const, margin: 0 }}>
+                  Trajectoire NRR — déclin vers maturité
+                </p>
+                <div style={{ display: 'flex', gap: 12, fontFamily: 'var(--font-mono)', fontSize: '0.6rem', color: 'var(--text-muted)' }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                    <span style={{ width: 16, height: 2, background: '#b06000', display: 'inline-block', borderTop: '1px dashed #b06000' }} />
+                    NRR = WACC
+                  </span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                    <span style={{ width: 8, height: 8, background: 'rgba(0,122,61,0.15)', border: '1px solid #007a3d', display: 'inline-block' }} />
+                    Divergent
+                  </span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                    <span style={{ width: 8, height: 8, background: 'rgba(204,0,0,0.1)', border: '1px solid #cc0000', display: 'inline-block' }} />
+                    Convergent
+                  </span>
+                </div>
               </div>
+              <NRRChart
+                rows={res.rows}
+                wacc={params.wacc}
+                nrrInit={params.nrrInit}
+                nrrTerminal={params.nrrTerminal}
+              />
             </div>
 
             {/* EV Bridge */}
@@ -414,9 +583,9 @@ export default function CohortDCFModel() {
       {activeTab === 'method' && (
         <div style={{ maxWidth: 680 }}>
           {[
-            { title: 'Pourquoi le DCF par cohorte ?', body: 'Un modèle SaaS classique valorise les revenus futurs à partir d\'un multiple d\'ARR. Il ignore que le NRR crée des séries géométriques de revenus croissantes — pas décroissantes. Dès lors que NRR > WACC, chaque cohorte client est une rente dont la valeur actualisée diverge, et le modèle standard sous-estime structurellement l\'equity value.' },
-            { title: 'La formule clé : NRR/WACC', body: 'Le ratio NRR/(1+WACC) est le test central. Si ratio > 1, la série est divergente. Si ratio < 1 (cas ServiceNow à NRR ~108%, WACC 10%), les deux méthodes convergent.' },
-            { title: 'Composantes de l\'EV', body: '(1) NPV Base existante — gross profit actualisé sur l\'horizon. (2) PV Terminal Value — FCF normalisé × multiple. (3) NPV Nouveaux logos — valeur du moteur d\'acquisition. La somme moins SBC plus cash donne l\'Equity Value.' },
+            { title: 'Pourquoi le DCF par cohorte ?', body: "Un modèle SaaS classique valorise les revenus futurs à partir d'un multiple d'ARR. Il ignore que le NRR crée des séries géométriques de revenus croissantes — pas décroissantes. Dès lors que NRR > WACC, chaque cohorte client est une rente dont la valeur actualisée diverge, et le modèle standard sous-estime structurellement l'equity value." },
+            { title: 'La formule clé : NRR/WACC', body: "Le ratio NRR/(1+WACC) est le test central. Si ratio > 1, la série est divergente. Si ratio < 1 (cas ServiceNow à NRR ~108%, WACC 10%), les deux méthodes convergent." },
+            { title: "Composantes de l'EV", body: "(1) NPV Base existante — gross profit actualisé sur l'horizon. (2) PV Terminal Value — FCF normalisé × multiple. (3) NPV Nouveaux logos — valeur du moteur d'acquisition. La somme moins SBC plus cash donne l'Equity Value." },
             { title: 'Hypothèses critiques', body: 'NRR initial et WACC déterminent 80% de la valeur. Le NRR terminal conditionne la Terminal Value. Le multiple FCF terminal (22-28x pour un SaaS mature) détermine la seconde composante.' },
           ].map((s, i) => (
             <div key={i} style={{ marginBottom: 28 }}>
