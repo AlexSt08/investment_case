@@ -1,5 +1,6 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import type { FinancialsResponse } from '../../pages/api/financials/[ticker]'
+import type { TickerSuggestion } from '../../pages/api/tickers'
 
 interface Params {
   revenueTTM: number; nrrInit: number; grossMargin: number; wacc: number
@@ -29,22 +30,19 @@ function compute(p: Params): Results {
     rows.push({ year: n, nrr, revenue: curRev, grossProfit: gp, discountFactor: df, pvGP, ratio: nrr / (1 + p.wacc) })
   }
   const revenueY10 = curRev
-  const fcfTerm = revenueY10 * p.fcfMargin
-  const tvGross = fcfTerm * p.tvMultiple
+  const tvGross = revenueY10 * p.fcfMargin * p.tvMultiple
   const pvTV = tvGross / Math.pow(1 + p.wacc, p.horizon)
   const evCohort = sumPV + pvTV + p.npvLogos
   const equityImplied = evCohort - p.sbc + p.netCash
   return { rows, sumPV, pvTV, tvGross, revenueY10, evCohort, equityImplied, upside: equityImplied / p.mktCap - 1 }
 }
 
-// ── NRR Trajectory Chart ──────────────────────────────────────────────────
+// ── NRR Chart ─────────────────────────────────────────────────────────────
 function NRRChart({ rows, wacc, nrrInit }: { rows: CohortRow[]; wacc: number; nrrInit: number; nrrTerminal: number }) {
   if (rows.length === 0) return null
   const VW = 400, VH = 110, PL = 38, PR = 14, PT = 12, PB = 28
   const plotW = VW - PL - PR, plotH = VH - PT - PB
-  const yMin = 100
-  const yMax = Math.ceil(nrrInit * 100) + 4
-  const yRange = yMax - yMin
+  const yMin = 100, yMax = Math.ceil(nrrInit * 100) + 4, yRange = yMax - yMin
   const waccThresh = (1 + wacc) * 100
   const toX = (i: number) => PL + (i / (rows.length - 1)) * plotW
   const toY = (pct: number) => PT + (1 - (pct - yMin) / yRange) * plotH
@@ -56,7 +54,6 @@ function NRRChart({ rows, wacc, nrrInit }: { rows: CohortRow[]; wacc: number; nr
   const areaBelowPts = hasBelowZone ? [`${toX(0)},${threshY}`, ...nrrPcts.map((v, i) => `${toX(i)},${Math.max(toY(v), threshY)}`), `${toX(rows.length - 1)},${threshY}`].join(' ') : ''
   const yTicks = [100, Math.round((yMin + yMax) / 2), yMax].filter((v, i, a) => a.indexOf(v) === i)
   const midIdx = Math.floor((rows.length - 1) / 2)
-  const labelPoints = [0, midIdx, rows.length - 1]
   return (
     <svg viewBox={`0 0 ${VW} ${VH}`} width="100%" style={{ display: 'block', overflow: 'visible' }}>
       {yTicks.map(v => <line key={v} x1={PL} x2={VW - PR} y1={toY(v)} y2={toY(v)} stroke="#E0D8CC" strokeWidth={0.5} strokeDasharray={v === 100 ? '0' : '2,3'} />)}
@@ -66,7 +63,7 @@ function NRRChart({ rows, wacc, nrrInit }: { rows: CohortRow[]; wacc: number; nr
       <text x={VW - PR + 2} y={threshY + 3.5} fontSize={7} fill="#b06000" fontFamily="'Courier New', monospace">{waccThresh.toFixed(0)}%</text>
       <text x={PL + 3} y={threshY - 3} fontSize={6.5} fill="#b06000" fontFamily="'Courier New', monospace" opacity={0.8}>NRR = WACC</text>
       <polyline points={linePts} fill="none" stroke="#0d7680" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
-      {labelPoints.map(i => (
+      {[0, midIdx, rows.length - 1].map(i => (
         <g key={i}>
           <circle cx={toX(i)} cy={toY(nrrPcts[i])} r={3} fill="#0d7680" />
           <text x={toX(i)} y={toY(nrrPcts[i]) - 6} textAnchor="middle" fontSize={7.5} fontWeight="600" fill="#0d7680" fontFamily="'Courier New', monospace">{nrrPcts[i].toFixed(0)}%</text>
@@ -79,64 +76,32 @@ function NRRChart({ rows, wacc, nrrInit }: { rows: CohortRow[]; wacc: number; nr
   )
 }
 
-// ── SliderRow — avec marqueur zéro optionnel ──────────────────────────────
+// ── SliderRow ─────────────────────────────────────────────────────────────
 function SliderRow({ label, value, min, max, step, format, onChange, highlight = false, showZeroMark = false }: {
   label: string; value: number; min: number; max: number; step: number
   format: (v: number) => string; onChange: (v: number) => void
   highlight?: boolean; showZeroMark?: boolean
 }) {
-  // Position du zéro sur la track (0..100%)
   const zeroPos = min < 0 && max > 0 ? ((0 - min) / (max - min)) * 100 : null
   const isNegative = showZeroMark && value < 0
-
   return (
     <div style={{ padding: '10px 0', borderBottom: '1px solid var(--border)', background: highlight ? 'rgba(191,78,20,0.04)' : 'transparent' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
         <span style={{ fontFamily: 'var(--font-sans)', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>{label}</span>
-        <span style={{
-          fontFamily: 'var(--font-mono)', fontSize: '0.82rem', fontWeight: 600, minWidth: 60, textAlign: 'right' as const,
-          color: highlight ? '#BF4E14' : isNegative ? '#cc0000' : 'var(--text-primary)',
-        }}>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.82rem', fontWeight: 600, minWidth: 60, textAlign: 'right' as const, color: highlight ? '#BF4E14' : isNegative ? '#cc0000' : 'var(--text-primary)' }}>
           {format(value)}
           {isNegative && <span style={{ fontSize: '0.6rem', marginLeft: 4, opacity: 0.7, fontWeight: 400 }}>dette</span>}
         </span>
       </div>
-
-      {/* Track wrapper avec marqueur zéro */}
       <div style={{ position: 'relative' as const }}>
-        <input
-          type="range" min={min} max={max} step={step} value={value}
+        <input type="range" min={min} max={max} step={step} value={value}
           onChange={e => onChange(parseFloat(e.target.value))}
-          style={{ width: '100%', accentColor: isNegative ? '#cc0000' : highlight ? '#BF4E14' : '#cc0000' }}
-        />
-        {/* Tick zéro */}
+          style={{ width: '100%', accentColor: isNegative ? '#cc0000' : highlight ? '#BF4E14' : '#cc0000' }} />
         {zeroPos !== null && (
-          <div style={{
-            position: 'absolute' as const,
-            left: `calc(${zeroPos}% - 0.5px)`,
-            top: '50%',
-            transform: 'translateY(-50%)',
-            width: 1,
-            height: 10,
-            background: isNegative ? '#cc000060' : '#0000001a',
-            pointerEvents: 'none' as const,
-          }} />
+          <div style={{ position: 'absolute' as const, left: `calc(${zeroPos}% - 0.5px)`, top: '50%', transform: 'translateY(-50%)', width: 1, height: 10, background: isNegative ? '#cc000060' : '#0000001a', pointerEvents: 'none' as const }} />
         )}
-        {/* Label "0" sous la track */}
         {zeroPos !== null && (
-          <div style={{
-            position: 'absolute' as const,
-            left: `${zeroPos}%`,
-            top: '100%',
-            transform: 'translateX(-50%)',
-            fontFamily: 'var(--font-mono)',
-            fontSize: '0.55rem',
-            color: isNegative ? '#cc000080' : '#00000030',
-            marginTop: 1,
-            pointerEvents: 'none' as const,
-          }}>
-            0
-          </div>
+          <div style={{ position: 'absolute' as const, left: `${zeroPos}%`, top: '100%', transform: 'translateX(-50%)', fontFamily: 'var(--font-mono)', fontSize: '0.55rem', color: isNegative ? '#cc000080' : '#00000030', marginTop: 1, pointerEvents: 'none' as const }}>0</div>
         )}
       </div>
     </div>
@@ -156,7 +121,7 @@ function KPICard({ label, value, sub, highlight = false, positive }: {
   )
 }
 
-// ── Cache badge ───────────────────────────────────────────────────────────
+// ── Cache Badge ───────────────────────────────────────────────────────────
 function CacheBadge({ status, label, quality }: { status: string; label: string; quality?: string }) {
   const cfg: Record<string, { bg: string; color: string; icon: string }> = {
     static:     { bg: 'rgba(0,122,61,0.08)',   color: '#007a3d', icon: '✓' },
@@ -177,12 +142,158 @@ function CacheBadge({ status, label, quality }: { status: string; label: string;
   )
 }
 
+// ── TickerInput — champ de recherche avec suggestions ─────────────────────
+function TickerInput({ value, onChange, onSelect, fetching }: {
+  value:     string
+  onChange:  (v: string) => void
+  onSelect:  (ticker: string) => void
+  fetching:  boolean
+}) {
+  const [suggestions, setSuggestions]   = useState<TickerSuggestion[]>([])
+  const [allTickers, setAllTickers]     = useState<TickerSuggestion[]>([])
+  const [open, setOpen]                 = useState(false)
+  const [activeIdx, setActiveIdx]       = useState(-1)
+  const wrapperRef                      = useRef<HTMLDivElement>(null)
+
+  // Charge la liste complète au montage — 1 seul appel
+  useEffect(() => {
+    fetch('/api/tickers')
+      .then(r => r.json())
+      .then((data: TickerSuggestion[]) => setAllTickers(data))
+      .catch(() => {})
+  }, [])
+
+  // Filtre en mémoire à chaque frappe
+  useEffect(() => {
+    const q = value.trim().toUpperCase()
+    if (!q) { setSuggestions([]); setOpen(false); return }
+    const filtered = allTickers.filter(d =>
+      d.ticker.startsWith(q) || d.companyName.toUpperCase().includes(q)
+    ).slice(0, 8)
+    setSuggestions(filtered)
+    setOpen(filtered.length > 0)
+    setActiveIdx(-1)
+  }, [value, allTickers])
+
+  // Click outside → ferme le dropdown
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (!open) {
+      if (e.key === 'Enter') onSelect(value)
+      return
+    }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setActiveIdx(i => Math.min(i + 1, suggestions.length - 1))
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setActiveIdx(i => Math.max(i - 1, -1))
+    } else if (e.key === 'Enter') {
+      e.preventDefault()
+      if (activeIdx >= 0 && suggestions[activeIdx]) {
+        const t = suggestions[activeIdx].ticker
+        onChange(t)
+        setOpen(false)
+        onSelect(t)
+      } else {
+        setOpen(false)
+        onSelect(value)
+      }
+    } else if (e.key === 'Escape') {
+      setOpen(false)
+    }
+  }
+
+  const handleSelect = (ticker: string) => {
+    onChange(ticker)
+    setOpen(false)
+    onSelect(ticker)
+  }
+
+  return (
+    <div ref={wrapperRef} style={{ position: 'relative' as const, flex: 1, minWidth: 0 }}>
+      <input
+        value={value}
+        onChange={e => onChange(e.target.value.toUpperCase())}
+        onKeyDown={handleKeyDown}
+        onFocus={() => suggestions.length > 0 && setOpen(true)}
+        placeholder="SNOW, DDOG, NET…"
+        style={{
+          width: '100%', boxSizing: 'border-box' as const,
+          padding: '6px 10px',
+          fontFamily: 'var(--font-mono)', fontSize: '0.82rem', letterSpacing: '0.06em',
+          background: 'var(--bg-card)', border: '1px solid var(--border-rule)',
+          borderRadius: open ? '2px 2px 0 0' : 2,
+          color: 'var(--text-primary)', outline: 'none',
+          textTransform: 'uppercase' as const,
+        }}
+      />
+
+      {/* Dropdown */}
+      {open && suggestions.length > 0 && (
+        <div style={{
+          position: 'absolute' as const, top: '100%', left: 0, right: 0, zIndex: 50,
+          background: 'var(--bg-card)',
+          border: '1px solid var(--border-rule)', borderTop: 'none',
+          borderRadius: '0 0 2px 2px',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.10)',
+          maxHeight: 220, overflowY: 'auto' as const,
+        }}>
+          {suggestions.map((s, i) => (
+            <div
+              key={s.ticker}
+              onMouseDown={() => handleSelect(s.ticker)}   // onMouseDown évite le blur avant clic
+              style={{
+                display: 'flex', alignItems: 'baseline', gap: 8,
+                padding: '7px 10px', cursor: 'pointer' as const,
+                background: i === activeIdx ? 'var(--bg-elevated)' : 'transparent',
+                borderBottom: i < suggestions.length - 1 ? '1px solid var(--border)' : 'none',
+              }}
+              onMouseEnter={() => setActiveIdx(i)}
+              onMouseLeave={() => setActiveIdx(-1)}
+            >
+              <span style={{
+                fontFamily: 'var(--font-mono)', fontSize: '0.78rem', fontWeight: 600,
+                color: s.source === 'static' ? 'var(--ft-teal)' : 'var(--text-primary)',
+                flexShrink: 0, minWidth: 44,
+              }}>
+                {s.ticker}
+              </span>
+              <span style={{
+                fontFamily: 'var(--font-sans)', fontSize: '0.72rem',
+                color: 'var(--text-muted)', overflow: 'hidden' as const,
+                textOverflow: 'ellipsis' as const, whiteSpace: 'nowrap' as const,
+              }}>
+                {s.companyName}
+              </span>
+              {s.source === 'static' && (
+                <span style={{ marginLeft: 'auto', fontFamily: 'var(--font-mono)', fontSize: '0.55rem', color: 'var(--ft-teal)', flexShrink: 0 }}>★</span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Defaults ──────────────────────────────────────────────────────────────
 const DEFAULT_PARAMS: Params = {
   revenueTTM: 4.47, nrrInit: 1.26, grossMargin: 0.75, wacc: 0.10,
   horizon: 10, nrrTerminal: 1.07, fcfMargin: 0.32, tvMultiple: 25,
   npvLogos: 13.0, sbc: 5.0, netCash: 3.5, mktCap: 57.0,
 }
 
+// ── Main ──────────────────────────────────────────────────────────────────
 export default function CohortDCFModel() {
   const [params, setParams]           = useState<Params>(DEFAULT_PARAMS)
   const [activeTab, setActiveTab]     = useState<'model' | 'table' | 'method'>('model')
@@ -196,9 +307,11 @@ export default function CohortDCFModel() {
   const res = compute(params)
   const set = useCallback((key: keyof Params) => (v: number) => setParams(p => ({ ...p, [key]: v })), [])
 
-  const fetchTicker = async (force = false) => {
-    const t = tickerInput.trim().toUpperCase()
+  const fetchTicker = async (ticker?: string, force = false) => {
+    const t = (ticker ?? tickerInput).trim().toUpperCase()
     if (!t) return
+    // Sync l'input si appelé via suggestion
+    if (ticker) setTickerInput(ticker)
     setFetching(true); setFetchError(''); setNrrMissing(false)
     try {
       const r    = await fetch(`/api/financials/${t}${force ? '?force=true' : ''}`)
@@ -247,19 +360,17 @@ export default function CohortDCFModel() {
           {/* Controls */}
           <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 4, padding: '18px 20px' }}>
 
-            {/* ── Auto-remplissage — layout fixé ── */}
+            {/* Auto-remplissage */}
             <div style={{ padding: '12px 14px', background: 'var(--bg)', border: '1px solid var(--border-rule)', borderRadius: 4, marginBottom: 16 }}>
               <p style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', letterSpacing: '0.12em', color: 'var(--text-muted)', textTransform: 'uppercase' as const, marginBottom: 8 }}>
                 Auto-remplissage
               </p>
-              {/* Flex row avec alignItems center pour aligner input et bouton */}
               <div style={{ display: 'flex', gap: 6, alignItems: 'center', width: '100%' }}>
-                <input
+                <TickerInput
                   value={tickerInput}
-                  onChange={e => setTickerInput(e.target.value.toUpperCase())}
-                  onKeyDown={e => e.key === 'Enter' && fetchTicker()}
-                  placeholder="SNOW, DDOG, NET…"
-                  style={{ flex: 1, minWidth: 0, padding: '6px 10px', fontFamily: 'var(--font-mono)', fontSize: '0.82rem', letterSpacing: '0.06em', background: 'var(--bg-card)', border: '1px solid var(--border-rule)', borderRadius: 2, color: 'var(--text-primary)', outline: 'none', textTransform: 'uppercase' as const }}
+                  onChange={setTickerInput}
+                  onSelect={t => fetchTicker(t)}
+                  fetching={fetching}
                 />
                 <button
                   onClick={() => fetchTicker()} disabled={fetching}
@@ -270,7 +381,7 @@ export default function CohortDCFModel() {
               </div>
               {fetchedData && !fetchError && <CacheBadge status={fetchedData.cacheStatus} label={fetchedData.cacheLabel} quality={fetchedData.earningsQuality} />}
               {fetchedData && fetchedData.cacheStatus === 'fresh' && (
-                <button onClick={() => fetchTicker(true)} style={{ marginTop: 6, width: '100%', padding: '4px 0', fontFamily: 'var(--font-sans)', fontSize: '0.68rem', color: 'var(--text-muted)', background: 'transparent', border: '1px dashed var(--border)', borderRadius: 2, cursor: 'pointer' }}>
+                <button onClick={() => fetchTicker(undefined, true)} style={{ marginTop: 6, width: '100%', padding: '4px 0', fontFamily: 'var(--font-sans)', fontSize: '0.68rem', color: 'var(--text-muted)', background: 'transparent', border: '1px dashed var(--border)', borderRadius: 2, cursor: 'pointer' }}>
                   ↻ Forcer la mise à jour (appel FMP)
                 </button>
               )}
@@ -278,14 +389,11 @@ export default function CohortDCFModel() {
               {fetchError && <p style={{ marginTop: 6, fontFamily: 'var(--font-sans)', fontSize: '0.72rem', color: '#cc0000' }}>✗ {fetchError}</p>}
             </div>
 
-            <p style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', letterSpacing: '0.12em', color: 'var(--text-muted)', textTransform: 'uppercase' as const, marginBottom: 14 }}>
-              Hypothèses — {companyName}
-            </p>
+            <p style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', letterSpacing: '0.12em', color: 'var(--text-muted)', textTransform: 'uppercase' as const, marginBottom: 14 }}>Hypothèses — {companyName}</p>
 
             <p style={{ fontFamily: 'var(--font-sans)', fontSize: '0.68rem', color: 'var(--ft-teal)', letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 8 }}>Société</p>
             <SliderRow label="Revenu TTM ($B)" value={params.revenueTTM} min={1} max={20} step={0.1} format={v => `$${v.toFixed(1)}B`} onChange={set('revenueTTM')} />
             <SliderRow label="Mkt Cap actuelle ($B)" value={params.mktCap} min={10} max={300} step={1} format={v => `$${v.toFixed(0)}B`} onChange={set('mktCap')} />
-            {/* Net Cash — min négatif, marqueur zéro activé */}
             <SliderRow label="Net Cash ($B)" value={params.netCash} min={-20} max={30} step={0.5} format={v => `$${v.toFixed(1)}B`} onChange={set('netCash')} showZeroMark />
 
             <p style={{ fontFamily: 'var(--font-sans)', fontSize: '0.68rem', color: 'var(--ft-teal)', letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 8, marginTop: 16 }}>Métriques clés</p>
@@ -312,7 +420,6 @@ export default function CohortDCFModel() {
 
           {/* Charts */}
           <div>
-            {/* PV Chart */}
             <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 4, padding: '18px 20px', marginBottom: 16 }}>
               <p style={{ fontFamily: 'var(--font-sans)', fontSize: '0.68rem', letterSpacing: '0.1em', color: 'var(--text-muted)', textTransform: 'uppercase' as const, marginBottom: 14 }}>PV Gross Profit par année — base existante</p>
               <div style={{ display: 'flex', gap: 0, alignItems: 'flex-end', height: 140 }}>
@@ -335,7 +442,6 @@ export default function CohortDCFModel() {
               </div>
             </div>
 
-            {/* NRR Chart */}
             <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 4, padding: '18px 20px', marginBottom: 16 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
                 <p style={{ fontFamily: 'var(--font-sans)', fontSize: '0.68rem', letterSpacing: '0.1em', color: 'var(--text-muted)', textTransform: 'uppercase' as const, margin: 0 }}>Trajectoire NRR — déclin vers maturité</p>
@@ -348,18 +454,17 @@ export default function CohortDCFModel() {
               <NRRChart rows={res.rows} wacc={params.wacc} nrrInit={params.nrrInit} nrrTerminal={params.nrrTerminal} />
             </div>
 
-            {/* EV Bridge */}
             <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 4, overflow: 'hidden' }}>
               <div style={{ padding: '12px 20px', borderBottom: '1px solid var(--border)', fontFamily: 'var(--font-sans)', fontSize: '0.68rem', letterSpacing: '0.1em', color: 'var(--text-muted)', textTransform: 'uppercase' as const }}>Bridge Equity Value</div>
               {[
-                { label: 'NPV Base existante', value: res.sumPV, indent: 0 },
-                { label: 'PV Terminal Value',  value: res.pvTV, indent: 0 },
-                { label: 'NPV Nouveaux logos', value: params.npvLogos, indent: 0 },
-                { label: 'EV Cohort totale',   value: res.evCohort, indent: 0, total: true },
-                { label: 'SBC dilution',        value: -params.sbc, indent: 1 },
-                { label: 'Net Cash',            value: params.netCash, indent: 1 },
-                { label: 'EQUITY VALUE IMPLICITE', value: res.equityImplied, indent: 0, total: true, accent: true },
-                { label: 'Market Cap actuelle', value: params.mktCap, indent: 0, muted: true },
+                { label: 'NPV Base existante',     value: res.sumPV,         indent: 0 },
+                { label: 'PV Terminal Value',       value: res.pvTV,          indent: 0 },
+                { label: 'NPV Nouveaux logos',      value: params.npvLogos,   indent: 0 },
+                { label: 'EV Cohort totale',        value: res.evCohort,      indent: 0, total: true },
+                { label: 'SBC dilution',             value: -params.sbc,       indent: 1 },
+                { label: 'Net Cash',                value: params.netCash,    indent: 1 },
+                { label: 'EQUITY VALUE IMPLICITE',  value: res.equityImplied, indent: 0, total: true, accent: true },
+                { label: 'Market Cap actuelle',     value: params.mktCap,     indent: 0, muted: true },
               ].map((row, i) => (
                 <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: `${(row as any).total ? 10 : 8}px ${20 + row.indent * 12}px`, borderBottom: '1px solid var(--border)', background: (row as any).accent ? 'var(--bg-elevated)' : (row as any).total ? 'rgba(0,0,0,0.02)' : 'transparent', borderTop: (row as any).total ? '1px solid var(--border-strong)' : 'none' }}>
                   <span style={{ fontFamily: (row as any).total ? 'var(--font-sans)' : 'var(--font-body)', fontSize: (row as any).total ? '0.78rem' : '0.82rem', fontWeight: (row as any).total ? 600 : 300, color: (row as any).muted ? 'var(--text-muted)' : 'var(--text-secondary)', letterSpacing: (row as any).total ? '0.04em' : '0' }}>{row.label}</span>
@@ -379,7 +484,6 @@ export default function CohortDCFModel() {
         </div>
       )}
 
-      {/* Table tab */}
       {activeTab === 'table' && (
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-sans)', fontSize: '0.82rem' }}>
@@ -419,7 +523,6 @@ export default function CohortDCFModel() {
         </div>
       )}
 
-      {/* Method tab */}
       {activeTab === 'method' && (
         <div style={{ maxWidth: 680 }}>
           {[
