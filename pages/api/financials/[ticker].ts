@@ -10,8 +10,8 @@ const supabase = createClient(
 )
 
 const FMP_BASE  = 'https://financialmodelingprep.com/stable'
-const WINDOW_MS = 5 * 24 * 60 * 60 * 1000  // ±5 jours en ms
-const TTL_24H   = 24 * 60 * 60 * 1000       // 24h en ms
+const WINDOW_MS = 5 * 24 * 60 * 60 * 1000
+const TTL_24H   = 24 * 60 * 60 * 1000
 
 // ── Types ─────────────────────────────────────────────────────────────────
 export interface FinancialsResponse {
@@ -39,38 +39,25 @@ interface EarningsDates {
   earningsQuality:  'confirmed' | 'estimated' | 'unknown'
 }
 
-// ── Type de refresh nécessaire ────────────────────────────────────────────
+// ── Type de refresh ───────────────────────────────────────────────────────
 type RefreshType = 'none' | 'dates_only' | 'full'
 
 function getRefreshType(cached: any | null): RefreshType {
   if (!cached) return 'full'
-
   const now          = Date.now()
   const fetchedAt    = new Date(cached.fetched_at).getTime()
   const nextEarnings = cached.next_earnings_date ? new Date(cached.next_earnings_date).getTime() : null
   const lastEarnings = cached.last_earnings_date ? new Date(cached.last_earnings_date).getTime() : null
-
   if (!nextEarnings) return 'full'
-
   const msToNext = nextEarnings - now
   const inWindow = Math.abs(msToNext) <= WINDOW_MS
-
-  if (inWindow) {
-    return (now - fetchedAt) > TTL_24H ? 'full' : 'none'
-  }
-
+  if (inWindow) return (now - fetchedAt) > TTL_24H ? 'full' : 'none'
   if (msToNext > WINDOW_MS) {
-    const freshAfterLastEarnings = !lastEarnings || fetchedAt > lastEarnings
-    return freshAfterLastEarnings ? 'none' : 'full'
+    return (!lastEarnings || fetchedAt > lastEarnings) ? 'none' : 'full'
   }
-
-  // next_earnings_date dépassée
-  if (fetchedAt > nextEarnings) return 'dates_only'
-  return 'full'
+  return fetchedAt > nextEarnings ? 'dates_only' : 'full'
 }
 
-// ── Indique si next_earnings_date est encore valide (non dépassée) ─────────
-// Quand c'est le cas, inutile d'appeler /earnings même dans un full refresh
 function hasValidFutureEarningsDate(cached: any | null): boolean {
   if (!cached?.next_earnings_date) return false
   return new Date(cached.next_earnings_date).getTime() > Date.now()
@@ -97,7 +84,7 @@ function firstItem(data: any): any {
   return null
 }
 
-// ── Parse earnings depuis /stable/earnings ────────────────────────────────
+// ── Parse earnings ────────────────────────────────────────────────────────
 function parseEarnings(data: any[]): EarningsDates {
   if (!Array.isArray(data) || data.length === 0) {
     return { lastEarningsDate: null, nextEarningsDate: null, earningsQuality: 'unknown' }
@@ -108,7 +95,6 @@ function parseEarnings(data: any[]): EarningsDates {
   )
   const next = sorted.find(e => e.epsActual === null && new Date(e.date) > now)
   const last = sorted.find(e => e.epsActual !== null && new Date(e.date) <= now)
-
   let earningsQuality: 'confirmed' | 'estimated' | 'unknown' = 'unknown'
   if (next?.lastUpdated) {
     const ageDays = (now.getTime() - new Date(next.lastUpdated).getTime()) / (1000 * 60 * 60 * 24)
@@ -121,14 +107,17 @@ function parseEarnings(data: any[]): EarningsDates {
   }
 }
 
-// ── Fetch financières (4 appels) — sans earnings ──────────────────────────
+// ── Fetch financières (5 appels parallèles, earnings exclu) ───────────────
 async function fetchFinancialsOnly(ticker: string, apiKey: string) {
   const t = ticker.toUpperCase()
-  const [profile, income, cashflow, balance] = await Promise.all([
-    fmpGet(`/profile?symbol=${t}`,                         apiKey).catch(() => null),
-    fmpGet(`/income-statement?symbol=${t}&limit=1`,        apiKey).catch(() => null),
-    fmpGet(`/cash-flow-statement?symbol=${t}&limit=1`,     apiKey).catch(() => null),
-    fmpGet(`/balance-sheet-statement?symbol=${t}&limit=1`, apiKey).catch(() => null),
+
+  const [profile, income, cashflow, balance, mktCapRaw] = await Promise.all([
+    fmpGet(`/profile?symbol=${t}`,                   apiKey).catch(() => null),
+    fmpGet(`/income-statement?symbol=${t}&limit=1`,  apiKey).catch(() => null),
+    fmpGet(`/cash-flow-statement?symbol=${t}`,       apiKey).catch(() => null),
+    fmpGet(`/balance-sheet-statement?symbol=${t}`,   apiKey).catch(() => null),
+    // Market cap : endpoint dédié — retourne [{ marketCap }]
+    fmpGet(`/market-capitalization?symbol=${t}`,     apiKey).catch(() => null),
   ])
 
   if (isFmpError(profile)) {
@@ -137,15 +126,16 @@ async function fetchFinancialsOnly(ticker: string, apiKey: string) {
     throw new Error(`Ticker "${t}" introuvable sur FMP`)
   }
 
-  const p = firstItem(profile)
-  const i = isFmpError(income)   ? null : firstItem(income)
-  const c = isFmpError(cashflow)  ? null : firstItem(cashflow)
-  const b = isFmpError(balance)   ? null : firstItem(balance)
-
-  return { p, i, c, b }
+  return {
+    p:  firstItem(profile),
+    i:  isFmpError(income)   ? null : firstItem(income),
+    c:  isFmpError(cashflow)  ? null : firstItem(cashflow),
+    b:  isFmpError(balance)   ? null : firstItem(balance),
+    mc: isFmpError(mktCapRaw) ? null : firstItem(mktCapRaw),
+  }
 }
 
-// ── Fetch earnings uniquement (1 appel) ───────────────────────────────────
+// ── Fetch earnings (1 appel) ──────────────────────────────────────────────
 async function fetchEarningsOnly(ticker: string, apiKey: string): Promise<EarningsDates> {
   const raw = await fmpGet(`/earnings?symbol=${ticker}&limit=5`, apiKey)
   return parseEarnings(Array.isArray(raw) ? raw : [])
@@ -154,17 +144,33 @@ async function fetchEarningsOnly(ticker: string, apiKey: string): Promise<Earnin
 // ── Assemble FinancialsResponse ───────────────────────────────────────────
 function buildResponse(
   ticker: string,
-  { p, i, c, b }: { p: any; i: any; c: any; b: any },
+  { p, i, c, b, mc }: { p: any; i: any; c: any; b: any; mc: any },
   earnings: EarningsDates
 ): FinancialsResponse {
-  const revenueTTM  = i?.revenue    ? i.revenue / 1e9 : 0
-  const grossMargin = i?.revenue    ? (i.grossProfit ?? 0) / i.revenue : 0
+
+  // Revenus & marges (income statement)
+  const revenueTTM  = i?.revenue ? i.revenue / 1e9 : 0
+  const grossMargin = i?.revenue ? (i.grossProfit ?? 0) / i.revenue : 0
   const fcfMargin   = i?.revenue && c?.freeCashFlow ? c.freeCashFlow / i.revenue : 0
-  const mktCap      = (p?.mktCap   ?? 0) / 1e9
-  const cash        = b?.cashAndCashEquivalents ?? 0
-  const debt        = b?.totalDebt  ?? 0
-  const netCash     = (cash - debt) / 1e9
-  const sbc         = c?.stockBasedCompensation ? Math.abs(c.stockBasedCompensation) / 1e9 : 0
+
+  // Market cap : endpoint dédié /market-capitalization → champ marketCap
+  // Fallback : profile mktCap (v3 compat) ou marketCap (autre nommage stable)
+  const rawMktCap = mc?.marketCap ?? p?.mktCap ?? p?.marketCap ?? 0
+  const mktCap    = rawMktCap / 1e9
+
+  // Net cash = trésorerie - dette totale
+  // Trésorerie : bilan en priorité, fallback cashflow cashAtEndOfPeriod
+  const cash    = b?.cashAndCashEquivalents
+               ?? b?.cashAndShortTermInvestments
+               ?? c?.cashAtEndOfPeriod
+               ?? 0
+  // Dette : totalDebt ou reconstitution long + court terme
+  const debt    = b?.totalDebt
+               ?? ((b?.longTermDebt ?? 0) + (b?.shortTermDebt ?? 0))
+  const netCash = (cash - debt) / 1e9
+
+  // SBC (cashflow)
+  const sbc = c?.stockBasedCompensation ? Math.abs(c.stockBasedCompensation) / 1e9 : 0
 
   return {
     ticker,
@@ -218,7 +224,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ error: 'Ticker invalide (1-6 lettres majuscules)' })
   }
 
-  // ── Layer 1 : données statiques pré-validées ──────────────────────────
+  // ── Layer 1 : données statiques ───────────────────────────────────────
   if (!force) {
     const staticData = getStaticData(ticker)
     if (staticData) {
@@ -241,11 +247,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const refreshType = force ? 'full' : getRefreshType(cached)
 
-  // ── none : 0 appel FMP
+  // none → 0 appel FMP
   if (refreshType === 'none' && cached) {
     const nextDate = cached.next_earnings_date ? new Date(cached.next_earnings_date) : null
     const lastDate = cached.last_earnings_date ? new Date(cached.last_earnings_date) : null
-    const label    = getCacheLabel(
+    const label = getCacheLabel(
       { fetchedAt: new Date(cached.fetched_at), lastEarningsDate: lastDate, nextEarningsDate: nextDate, earningsQuality: cached.earnings_date_quality ?? 'unknown' },
       'fresh'
     )
@@ -269,8 +275,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-
-    // ── dates_only : 1 appel earnings — finances intactes
+    // dates_only → 1 appel earnings, finances inchangées
     if (refreshType === 'dates_only' && cached) {
       const dates = await fetchEarningsOnly(ticker, apiKey)
       await supabase.from('ticker_cache').update({
@@ -290,20 +295,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       })
     }
 
-    // ── full : refresh financier obligatoire
-    // Earnings : appelé SEULEMENT si next_earnings_date est dépassée ou inconnue
-    // Si la date future est encore valide → on la réutilise depuis le cache (0 appel earnings)
+    // full → 5 appels financiers + earnings conditionnel
     const earningsDatesValid = !force && hasValidFutureEarningsDate(cached)
-
     const financials = await fetchFinancialsOnly(ticker, apiKey)
-
     const earnings: EarningsDates = earningsDatesValid
       ? {
           lastEarningsDate: cached.last_earnings_date,
           nextEarningsDate: cached.next_earnings_date,
           earningsQuality:  cached.earnings_date_quality ?? 'unknown',
         }
-      : await fetchEarningsOnly(ticker, apiKey)  // 1 appel supplémentaire si nécessaire
+      : await fetchEarningsOnly(ticker, apiKey)
 
     const fmpData = buildResponse(ticker, financials, earnings)
     await upsertCache(ticker, fmpData)
@@ -312,11 +313,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       ? Math.round((new Date(fmpData.nextEarningsDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
       : null
 
-    const earningsNote = earningsDatesValid ? ' · dates earnings inchangées' : ''
     return res.status(200).json({
       ...fmpData,
       cacheStatus: 'fmp',
-      cacheLabel:  `FMP · ${new Date().toLocaleDateString('fr-FR')}${daysToNext !== null ? ` · Résultats dans ${daysToNext}j` : ''}${earningsNote}`,
+      cacheLabel:  [
+        `FMP · ${new Date().toLocaleDateString('fr-FR')}`,
+        daysToNext !== null ? `Résultats dans ${daysToNext}j` : null,
+        earningsDatesValid ? 'dates earnings inchangées' : null,
+      ].filter(Boolean).join(' · '),
     })
 
   } catch (err) {
