@@ -77,26 +77,27 @@ function NRRChart({ rows, wacc, nrrInit }: { rows: CohortRow[]; wacc: number; nr
 }
 
 // ── SliderRow ─────────────────────────────────────────────────────────────
-function SliderRow({ label, value, min, max, step, format, onChange, highlight = false, showZeroMark = false }: {
+function SliderRow({ label, value, min, max, step, format, onChange, highlight = false, showZeroMark = false, warn = false }: {
   label: string; value: number; min: number; max: number; step: number
   format: (v: number) => string; onChange: (v: number) => void
-  highlight?: boolean; showZeroMark?: boolean
+  highlight?: boolean; showZeroMark?: boolean; warn?: boolean
 }) {
-  const zeroPos = min < 0 && max > 0 ? ((0 - min) / (max - min)) * 100 : null
+  const zeroPos   = min < 0 && max > 0 ? ((0 - min) / (max - min)) * 100 : null
   const isNegative = showZeroMark && value < 0
   return (
     <div style={{ padding: '10px 0', borderBottom: '1px solid var(--border)', background: highlight ? 'rgba(191,78,20,0.04)' : 'transparent' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
         <span style={{ fontFamily: 'var(--font-sans)', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>{label}</span>
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.82rem', fontWeight: 600, minWidth: 60, textAlign: 'right' as const, color: highlight ? '#BF4E14' : isNegative ? '#cc0000' : 'var(--text-primary)' }}>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.82rem', fontWeight: 600, minWidth: 60, textAlign: 'right' as const, color: highlight ? '#BF4E14' : isNegative ? '#cc0000' : warn ? '#b06000' : 'var(--text-primary)' }}>
           {format(value)}
           {isNegative && <span style={{ fontSize: '0.6rem', marginLeft: 4, opacity: 0.7, fontWeight: 400 }}>dette</span>}
+          {warn && !isNegative && <span style={{ fontSize: '0.6rem', marginLeft: 4, opacity: 0.8, fontWeight: 400 }}>⚠ manuel</span>}
         </span>
       </div>
       <div style={{ position: 'relative' as const }}>
         <input type="range" min={min} max={max} step={step} value={value}
           onChange={e => onChange(parseFloat(e.target.value))}
-          style={{ width: '100%', accentColor: isNegative ? '#cc0000' : highlight ? '#BF4E14' : '#cc0000' }} />
+          style={{ width: '100%', accentColor: isNegative ? '#cc0000' : warn ? '#b06000' : highlight ? '#BF4E14' : '#cc0000' }} />
         {zeroPos !== null && (
           <div style={{ position: 'absolute' as const, left: `calc(${zeroPos}% - 0.5px)`, top: '50%', transform: 'translateY(-50%)', width: 1, height: 10, background: isNegative ? '#cc000060' : '#0000001a', pointerEvents: 'none' as const }} />
         )}
@@ -142,82 +143,159 @@ function CacheBadge({ status, label, quality }: { status: string; label: string;
   )
 }
 
-// ── TickerInput — champ de recherche avec suggestions ─────────────────────
-function TickerInput({ value, onChange, onSelect, fetching }: {
-  value:     string
-  onChange:  (v: string) => void
-  onSelect:  (ticker: string) => void
-  fetching:  boolean
-}) {
-  const [suggestions, setSuggestions]   = useState<TickerSuggestion[]>([])
-  const [allTickers, setAllTickers]     = useState<TickerSuggestion[]>([])
-  const [open, setOpen]                 = useState(false)
-  const [activeIdx, setActiveIdx]       = useState(-1)
-  const wrapperRef                      = useRef<HTMLDivElement>(null)
+// ── DataAlerts ────────────────────────────────────────────────────────────
+interface AlertsProps {
+  ticker:         string
+  notInCache:     boolean
+  data:           FinancialsResponse | null
+  nrrWasNull:     boolean
+  fetchedAt?:     string
+}
 
-  // Charge la liste complète au montage — 1 seul appel
+function DataAlerts({ ticker, notInCache, data, nrrWasNull, fetchedAt }: AlertsProps) {
+  const [copied, setCopied] = useState(false)
+
+  const copyCmd = () => {
+    navigator.clipboard.writeText(`Fonda Cohorte ${ticker}`).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }
+
+  const alerts: { level: 'error' | 'warn' | 'info'; msg: string }[] = []
+
+  // Niveau 2 — champs manquants (seulement si le ticker est dans le cache)
+  if (!notInCache && data) {
+    if (data.nrr === null || nrrWasNull)
+      alerts.push({ level: 'warn', msg: 'NRR — non disponible via API, à renseigner manuellement' })
+    if (data.sbc === 0)
+      alerts.push({ level: 'warn', msg: 'SBC à 0 — vérifier si normal pour cette société' })
+    if (data.netCash === 0)
+      alerts.push({ level: 'warn', msg: 'Net Cash à 0 — vérifier si dette nette' })
+    if (data.mktCap === 0)
+      alerts.push({ level: 'warn', msg: 'Market Cap absente — données non initialisées' })
+    if (data.revenueTTM === 0)
+      alerts.push({ level: 'error', msg: 'Revenue TTM absent — données non initialisées' })
+  }
+
+  // Niveau 3 — données périmées (>180j)
+  if (!notInCache && fetchedAt) {
+    const ageDays = (Date.now() - new Date(fetchedAt).getTime()) / (1000 * 60 * 60 * 24)
+    if (ageDays > 180)
+      alerts.push({ level: 'info', msg: `Dernière mise à jour il y a ${Math.round(ageDays / 30)} mois — pensez à rafraîchir` })
+  }
+
+  if (!notInCache && alerts.length === 0) return null
+
+  const fondaCmd = `Fonda Cohorte ${ticker}`
+
+  return (
+    <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column' as const, gap: 6 }}>
+
+      {/* Niveau 1 — ticker absent */}
+      {notInCache && (
+        <div style={{ padding: '10px 12px', background: 'rgba(191,78,20,0.07)', border: '1px solid rgba(191,78,20,0.25)', borderLeft: '3px solid #BF4E14', borderRadius: 2 }}>
+          <div style={{ fontFamily: 'var(--font-sans)', fontSize: '0.72rem', fontWeight: 600, color: '#BF4E14', marginBottom: 6 }}>
+            ⚠ {ticker} absent de la base de données
+          </div>
+          <div style={{ fontFamily: 'var(--font-sans)', fontSize: '0.68rem', color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: 8 }}>
+            Initialisez les données en tapant la commande suivante dans Claude :
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <code style={{ flex: 1, fontFamily: 'var(--font-mono)', fontSize: '0.72rem', background: 'var(--bg-elevated)', padding: '4px 8px', borderRadius: 2, color: '#BF4E14', letterSpacing: '0.04em' }}>
+              {fondaCmd}
+            </code>
+            <button
+              onClick={copyCmd}
+              style={{ flexShrink: 0, padding: '4px 10px', fontFamily: 'var(--font-sans)', fontSize: '0.65rem', background: copied ? '#007a3d' : '#BF4E14', color: '#fff', border: 'none', borderRadius: 2, cursor: 'pointer', transition: 'background 0.2s' }}
+            >
+              {copied ? '✓ Copié' : 'Copier'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Niveaux 2 & 3 — champs manquants / données périmées */}
+      {alerts.length > 0 && (
+        <div style={{
+          padding: '8px 12px',
+          background: alerts.some(a => a.level === 'error') ? 'rgba(204,0,0,0.05)' : alerts.some(a => a.level === 'warn') ? 'rgba(176,96,0,0.06)' : 'rgba(0,0,0,0.03)',
+          border: `1px solid ${alerts.some(a => a.level === 'error') ? 'rgba(204,0,0,0.2)' : alerts.some(a => a.level === 'warn') ? 'rgba(176,96,0,0.2)' : 'var(--border)'}`,
+          borderRadius: 2,
+        }}>
+          <div style={{ fontFamily: 'var(--font-sans)', fontSize: '0.68rem', fontWeight: 600, color: alerts.some(a => a.level === 'error') ? '#cc0000' : '#b06000', marginBottom: 5 }}>
+            Données incomplètes détectées
+          </div>
+          {alerts.map((a, i) => (
+            <div key={i} style={{ fontFamily: 'var(--font-sans)', fontSize: '0.66rem', color: 'var(--text-secondary)', lineHeight: 1.5, display: 'flex', gap: 5 }}>
+              <span style={{ color: a.level === 'error' ? '#cc0000' : a.level === 'warn' ? '#b06000' : '#888', flexShrink: 0 }}>
+                {a.level === 'error' ? '✗' : a.level === 'warn' ? '⚠' : 'ℹ'}
+              </span>
+              <span>{a.msg}</span>
+            </div>
+          ))}
+          {!notInCache && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}>
+              <code style={{ flex: 1, fontFamily: 'var(--font-mono)', fontSize: '0.68rem', background: 'var(--bg-elevated)', padding: '3px 7px', borderRadius: 2, color: 'var(--text-secondary)' }}>
+                {fondaCmd}
+              </code>
+              <button
+                onClick={copyCmd}
+                style={{ flexShrink: 0, padding: '3px 8px', fontFamily: 'var(--font-sans)', fontSize: '0.62rem', background: copied ? '#007a3d' : 'var(--ft-slate)', color: '#fff', border: 'none', borderRadius: 2, cursor: 'pointer', transition: 'background 0.2s' }}
+              >
+                {copied ? '✓' : 'Copier'}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── TickerInput ───────────────────────────────────────────────────────────
+function TickerInput({ value, onChange, onSelect }: {
+  value: string; onChange: (v: string) => void; onSelect: (ticker: string) => void
+}) {
+  const [suggestions, setSuggestions] = useState<TickerSuggestion[]>([])
+  const [allTickers, setAllTickers]   = useState<TickerSuggestion[]>([])
+  const [open, setOpen]               = useState(false)
+  const [activeIdx, setActiveIdx]     = useState(-1)
+  const wrapperRef                    = useRef<HTMLDivElement>(null)
+
   useEffect(() => {
-    fetch('/api/tickers')
-      .then(r => r.json())
-      .then((data: TickerSuggestion[]) => setAllTickers(data))
-      .catch(() => {})
+    fetch('/api/tickers').then(r => r.json()).then((data: TickerSuggestion[]) => setAllTickers(data)).catch(() => {})
   }, [])
 
-  // Filtre en mémoire à chaque frappe
   useEffect(() => {
     const q = value.trim().toUpperCase()
     if (!q) { setSuggestions([]); setOpen(false); return }
-    const filtered = allTickers.filter(d =>
-      d.ticker.startsWith(q) || d.companyName.toUpperCase().includes(q)
-    ).slice(0, 8)
+    const filtered = allTickers.filter(d => d.ticker.startsWith(q) || d.companyName.toUpperCase().includes(q)).slice(0, 8)
     setSuggestions(filtered)
     setOpen(filtered.length > 0)
     setActiveIdx(-1)
   }, [value, allTickers])
 
-  // Click outside → ferme le dropdown
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
-        setOpen(false)
-      }
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) setOpen(false)
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (!open) {
-      if (e.key === 'Enter') onSelect(value)
-      return
-    }
-    if (e.key === 'ArrowDown') {
+    if (!open) { if (e.key === 'Enter') onSelect(value); return }
+    if (e.key === 'ArrowDown')  { e.preventDefault(); setActiveIdx(i => Math.min(i + 1, suggestions.length - 1)) }
+    else if (e.key === 'ArrowUp')   { e.preventDefault(); setActiveIdx(i => Math.max(i - 1, -1)) }
+    else if (e.key === 'Enter') {
       e.preventDefault()
-      setActiveIdx(i => Math.min(i + 1, suggestions.length - 1))
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault()
-      setActiveIdx(i => Math.max(i - 1, -1))
-    } else if (e.key === 'Enter') {
-      e.preventDefault()
-      if (activeIdx >= 0 && suggestions[activeIdx]) {
-        const t = suggestions[activeIdx].ticker
-        onChange(t)
-        setOpen(false)
-        onSelect(t)
-      } else {
-        setOpen(false)
-        onSelect(value)
-      }
-    } else if (e.key === 'Escape') {
-      setOpen(false)
-    }
+      const t = activeIdx >= 0 ? suggestions[activeIdx]?.ticker : value
+      if (t) { onChange(t); setOpen(false); onSelect(t) }
+    } else if (e.key === 'Escape') { setOpen(false) }
   }
 
-  const handleSelect = (ticker: string) => {
-    onChange(ticker)
-    setOpen(false)
-    onSelect(ticker)
-  }
+  const handleSelect = (ticker: string) => { onChange(ticker); setOpen(false); onSelect(ticker) }
 
   return (
     <div ref={wrapperRef} style={{ position: 'relative' as const, flex: 1, minWidth: 0 }}>
@@ -227,57 +305,18 @@ function TickerInput({ value, onChange, onSelect, fetching }: {
         onKeyDown={handleKeyDown}
         onFocus={() => suggestions.length > 0 && setOpen(true)}
         placeholder="SNOW, DDOG, NET…"
-        style={{
-          width: '100%', boxSizing: 'border-box' as const,
-          padding: '6px 10px',
-          fontFamily: 'var(--font-mono)', fontSize: '0.82rem', letterSpacing: '0.06em',
-          background: 'var(--bg-card)', border: '1px solid var(--border-rule)',
-          borderRadius: open ? '2px 2px 0 0' : 2,
-          color: 'var(--text-primary)', outline: 'none',
-          textTransform: 'uppercase' as const,
-        }}
+        style={{ width: '100%', boxSizing: 'border-box' as const, padding: '6px 10px', fontFamily: 'var(--font-mono)', fontSize: '0.82rem', letterSpacing: '0.06em', background: 'var(--bg-card)', border: '1px solid var(--border-rule)', borderRadius: open ? '2px 2px 0 0' : 2, color: 'var(--text-primary)', outline: 'none', textTransform: 'uppercase' as const }}
       />
-
-      {/* Dropdown */}
       {open && suggestions.length > 0 && (
-        <div style={{
-          position: 'absolute' as const, top: '100%', left: 0, right: 0, zIndex: 50,
-          background: 'var(--bg-card)',
-          border: '1px solid var(--border-rule)', borderTop: 'none',
-          borderRadius: '0 0 2px 2px',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.10)',
-          maxHeight: 220, overflowY: 'auto' as const,
-        }}>
+        <div style={{ position: 'absolute' as const, top: '100%', left: 0, right: 0, zIndex: 50, background: 'var(--bg-card)', border: '1px solid var(--border-rule)', borderTop: 'none', borderRadius: '0 0 2px 2px', boxShadow: '0 4px 12px rgba(0,0,0,0.10)', maxHeight: 220, overflowY: 'auto' as const }}>
           {suggestions.map((s, i) => (
-            <div
-              key={s.ticker}
-              onMouseDown={() => handleSelect(s.ticker)}   // onMouseDown évite le blur avant clic
-              style={{
-                display: 'flex', alignItems: 'baseline', gap: 8,
-                padding: '7px 10px', cursor: 'pointer' as const,
-                background: i === activeIdx ? 'var(--bg-elevated)' : 'transparent',
-                borderBottom: i < suggestions.length - 1 ? '1px solid var(--border)' : 'none',
-              }}
-              onMouseEnter={() => setActiveIdx(i)}
-              onMouseLeave={() => setActiveIdx(-1)}
+            <div key={s.ticker} onMouseDown={() => handleSelect(s.ticker)}
+              style={{ display: 'flex', alignItems: 'baseline', gap: 8, padding: '7px 10px', cursor: 'pointer' as const, background: i === activeIdx ? 'var(--bg-elevated)' : 'transparent', borderBottom: i < suggestions.length - 1 ? '1px solid var(--border)' : 'none' }}
+              onMouseEnter={() => setActiveIdx(i)} onMouseLeave={() => setActiveIdx(-1)}
             >
-              <span style={{
-                fontFamily: 'var(--font-mono)', fontSize: '0.78rem', fontWeight: 600,
-                color: s.source === 'static' ? 'var(--ft-teal)' : 'var(--text-primary)',
-                flexShrink: 0, minWidth: 44,
-              }}>
-                {s.ticker}
-              </span>
-              <span style={{
-                fontFamily: 'var(--font-sans)', fontSize: '0.72rem',
-                color: 'var(--text-muted)', overflow: 'hidden' as const,
-                textOverflow: 'ellipsis' as const, whiteSpace: 'nowrap' as const,
-              }}>
-                {s.companyName}
-              </span>
-              {s.source === 'static' && (
-                <span style={{ marginLeft: 'auto', fontFamily: 'var(--font-mono)', fontSize: '0.55rem', color: 'var(--ft-teal)', flexShrink: 0 }}>★</span>
-              )}
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', fontWeight: 600, color: s.source === 'static' ? 'var(--ft-teal)' : 'var(--text-primary)', flexShrink: 0, minWidth: 44 }}>{s.ticker}</span>
+              <span style={{ fontFamily: 'var(--font-sans)', fontSize: '0.72rem', color: 'var(--text-muted)', overflow: 'hidden' as const, textOverflow: 'ellipsis' as const, whiteSpace: 'nowrap' as const }}>{s.companyName}</span>
+              {s.source === 'static' && <span style={{ marginLeft: 'auto', fontFamily: 'var(--font-mono)', fontSize: '0.55rem', color: 'var(--ft-teal)', flexShrink: 0 }}>★</span>}
             </div>
           ))}
         </div>
@@ -295,13 +334,14 @@ const DEFAULT_PARAMS: Params = {
 
 // ── Main ──────────────────────────────────────────────────────────────────
 export default function CohortDCFModel() {
-  const [params, setParams]           = useState<Params>(DEFAULT_PARAMS)
-  const [activeTab, setActiveTab]     = useState<'model' | 'table' | 'method'>('model')
+  const [params, setParams]         = useState<Params>(DEFAULT_PARAMS)
+  const [activeTab, setActiveTab]   = useState<'model' | 'table' | 'method'>('model')
   const [tickerInput, setTickerInput] = useState('SNOW')
-  const [fetching, setFetching]       = useState(false)
-  const [fetchError, setFetchError]   = useState('')
+  const [fetching, setFetching]     = useState(false)
   const [fetchedData, setFetchedData] = useState<FinancialsResponse | null>(null)
-  const [nrrMissing, setNrrMissing]   = useState(false)
+  const [notInCache, setNotInCache] = useState(false)
+  const [nrrWasNull, setNrrWasNull] = useState(false)
+  const [fetchedAt, setFetchedAt]   = useState<string | undefined>(undefined)
   const [companyName, setCompanyName] = useState('Snowflake (SNOW)')
 
   const res = compute(params)
@@ -310,18 +350,40 @@ export default function CohortDCFModel() {
   const fetchTicker = async (ticker?: string, force = false) => {
     const t = (ticker ?? tickerInput).trim().toUpperCase()
     if (!t) return
-    // Sync l'input si appelé via suggestion
     if (ticker) setTickerInput(ticker)
-    setFetching(true); setFetchError(''); setNrrMissing(false)
+    setFetching(true); setNotInCache(false); setNrrWasNull(false)
     try {
       const r    = await fetch(`/api/financials/${t}${force ? '?force=true' : ''}`)
-      const data: FinancialsResponse = await r.json()
-      if (!r.ok) { setFetchError((data as any).error ?? 'Erreur inconnue'); return }
-      setFetchedData(data)
-      setCompanyName(`${data.companyName} (${t})`)
-      setParams(p => ({ ...p, revenueTTM: data.revenueTTM, grossMargin: data.grossMargin, fcfMargin: Math.max(0.05, data.fcfMargin), mktCap: data.mktCap, netCash: data.netCash, sbc: data.sbc, ...(data.nrr ? { nrrInit: data.nrr } : {}) }))
-      if (!data.nrr) setNrrMissing(true)
-    } catch { setFetchError("Impossible de joindre l'API") }
+      const data = await r.json()
+
+      // Ticker absent → afficher alerte, ne pas écraser les paramètres
+      if (!r.ok && data?.error === 'NOT_IN_CACHE') {
+        setNotInCache(true)
+        setFetchedData(null)
+        return
+      }
+      if (!r.ok) return
+
+      const fData = data as FinancialsResponse
+      setFetchedData(fData)
+      setCompanyName(`${fData.companyName} (${t})`)
+      setFetchedAt(fData.period)
+
+      // Ne pas écraser si revenueTTM absent (données non initialisées)
+      if (fData.revenueTTM > 0) {
+        setNrrWasNull(fData.nrr === null)
+        setParams(p => ({
+          ...p,
+          revenueTTM:  fData.revenueTTM,
+          grossMargin: fData.grossMargin,
+          fcfMargin:   Math.max(0.05, fData.fcfMargin),
+          mktCap:      fData.mktCap,
+          netCash:     fData.netCash,
+          sbc:         fData.sbc,
+          ...(fData.nrr ? { nrrInit: fData.nrr } : {}),
+        }))
+      }
+    } catch { /* silencieux */ }
     finally { setFetching(false) }
   }
 
@@ -335,8 +397,6 @@ export default function CohortDCFModel() {
 
   return (
     <div style={{ fontFamily: 'var(--font-body)' }}>
-
-      {/* KPI Strip */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, marginBottom: 28 }}>
         <KPICard label="Equity implicite" value={`$${res.equityImplied.toFixed(1)}B`} sub={`vs $${params.mktCap}B marché`} highlight />
         <KPICard label="Upside / (Downside)" value={`${res.upside >= 0 ? '+' : ''}${(res.upside * 100).toFixed(0)}%`} sub="méthode cohort" positive={res.upside > 0.1} />
@@ -347,7 +407,6 @@ export default function CohortDCFModel() {
           positive={params.nrrInit / (1 + params.wacc) > 1} />
       </div>
 
-      {/* Tabs */}
       <div style={{ borderBottom: '1px solid var(--border-rule)', marginBottom: 24, display: 'flex' }}>
         {[['model', 'Modèle interactif'], ['table', 'Table cohorte'], ['method', 'Méthodologie']].map(([t, l]) => (
           <button key={t} onClick={() => setActiveTab(t as any)} style={tabStyle(t)}>{l}</button>
@@ -356,37 +415,26 @@ export default function CohortDCFModel() {
 
       {activeTab === 'model' && (
         <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: 28, alignItems: 'start' }}>
-
-          {/* Controls */}
           <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 4, padding: '18px 20px' }}>
 
             {/* Auto-remplissage */}
             <div style={{ padding: '12px 14px', background: 'var(--bg)', border: '1px solid var(--border-rule)', borderRadius: 4, marginBottom: 16 }}>
-              <p style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', letterSpacing: '0.12em', color: 'var(--text-muted)', textTransform: 'uppercase' as const, marginBottom: 8 }}>
-                Auto-remplissage
-              </p>
+              <p style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', letterSpacing: '0.12em', color: 'var(--text-muted)', textTransform: 'uppercase' as const, marginBottom: 8 }}>Auto-remplissage</p>
               <div style={{ display: 'flex', gap: 6, alignItems: 'center', width: '100%' }}>
-                <TickerInput
-                  value={tickerInput}
-                  onChange={setTickerInput}
-                  onSelect={t => fetchTicker(t)}
-                  fetching={fetching}
-                />
-                <button
-                  onClick={() => fetchTicker()} disabled={fetching}
-                  style={{ flexShrink: 0, padding: '6px 12px', fontFamily: 'var(--font-sans)', fontSize: '0.75rem', background: fetching ? 'var(--bg-elevated)' : 'var(--ft-slate)', color: fetching ? 'var(--text-muted)' : '#fff', border: 'none', borderRadius: 2, cursor: fetching ? 'wait' : 'pointer', whiteSpace: 'nowrap' as const }}
-                >
+                <TickerInput value={tickerInput} onChange={setTickerInput} onSelect={t => fetchTicker(t)} />
+                <button onClick={() => fetchTicker()} disabled={fetching}
+                  style={{ flexShrink: 0, padding: '6px 12px', fontFamily: 'var(--font-sans)', fontSize: '0.75rem', background: fetching ? 'var(--bg-elevated)' : 'var(--ft-slate)', color: fetching ? 'var(--text-muted)' : '#fff', border: 'none', borderRadius: 2, cursor: fetching ? 'wait' : 'pointer', whiteSpace: 'nowrap' as const }}>
                   {fetching ? '…' : '↓ Charger'}
                 </button>
               </div>
-              {fetchedData && !fetchError && <CacheBadge status={fetchedData.cacheStatus} label={fetchedData.cacheLabel} quality={fetchedData.earningsQuality} />}
-              {fetchedData && fetchedData.cacheStatus === 'fresh' && (
-                <button onClick={() => fetchTicker(undefined, true)} style={{ marginTop: 6, width: '100%', padding: '4px 0', fontFamily: 'var(--font-sans)', fontSize: '0.68rem', color: 'var(--text-muted)', background: 'transparent', border: '1px dashed var(--border)', borderRadius: 2, cursor: 'pointer' }}>
-                  ↻ Forcer la mise à jour (appel FMP)
-                </button>
-              )}
-              {nrrMissing && <p style={{ marginTop: 6, fontFamily: 'var(--font-sans)', fontSize: '0.7rem', color: '#b06000', lineHeight: 1.4 }}>⚠ NRR non disponible via API — ajustez manuellement le slider</p>}
-              {fetchError && <p style={{ marginTop: 6, fontFamily: 'var(--font-sans)', fontSize: '0.72rem', color: '#cc0000' }}>✗ {fetchError}</p>}
+              {fetchedData && !notInCache && <CacheBadge status={fetchedData.cacheStatus} label={fetchedData.cacheLabel} quality={fetchedData.earningsQuality} />}
+              <DataAlerts
+                ticker={tickerInput.trim().toUpperCase() || 'TICKER'}
+                notInCache={notInCache}
+                data={fetchedData}
+                nrrWasNull={nrrWasNull}
+                fetchedAt={fetchedAt}
+              />
             </div>
 
             <p style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', letterSpacing: '0.12em', color: 'var(--text-muted)', textTransform: 'uppercase' as const, marginBottom: 14 }}>Hypothèses — {companyName}</p>
@@ -397,7 +445,7 @@ export default function CohortDCFModel() {
             <SliderRow label="Net Cash ($B)" value={params.netCash} min={-20} max={30} step={0.5} format={v => `$${v.toFixed(1)}B`} onChange={set('netCash')} showZeroMark />
 
             <p style={{ fontFamily: 'var(--font-sans)', fontSize: '0.68rem', color: 'var(--ft-teal)', letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 8, marginTop: 16 }}>Métriques clés</p>
-            <SliderRow label="NRR initial" value={params.nrrInit} min={1.00} max={1.60} step={0.01} format={v => `${(v * 100).toFixed(0)}%`} onChange={set('nrrInit')} highlight />
+            <SliderRow label="NRR initial" value={params.nrrInit} min={1.00} max={1.60} step={0.01} format={v => `${(v * 100).toFixed(0)}%`} onChange={set('nrrInit')} highlight warn={nrrWasNull} />
             <SliderRow label="Gross Margin" value={params.grossMargin} min={0.40} max={0.90} step={0.01} format={v => `${(v * 100).toFixed(0)}%`} onChange={set('grossMargin')} />
             <SliderRow label="FCF Margin (maturité)" value={params.fcfMargin} min={0.10} max={0.50} step={0.01} format={v => `${(v * 100).toFixed(0)}%`} onChange={set('fcfMargin')} />
             <SliderRow label="SBC ajustement ($B)" value={params.sbc} min={0} max={15} step={0.5} format={v => `$${v.toFixed(1)}B`} onChange={set('sbc')} />
@@ -410,7 +458,7 @@ export default function CohortDCFModel() {
             <SliderRow label="NPV nouveaux logos ($B)" value={params.npvLogos} min={0} max={30} step={0.5} format={v => `$${v.toFixed(1)}B`} onChange={set('npvLogos')} />
 
             <button
-              onClick={() => { setParams(DEFAULT_PARAMS); setCompanyName('Snowflake (SNOW)'); setFetchedData(null); setTickerInput('SNOW') }}
+              onClick={() => { setParams(DEFAULT_PARAMS); setCompanyName('Snowflake (SNOW)'); setFetchedData(null); setTickerInput('SNOW'); setNotInCache(false); setNrrWasNull(false) }}
               style={{ marginTop: 16, width: '100%', padding: '7px 0', fontFamily: 'var(--font-sans)', fontSize: '0.72rem', letterSpacing: '0.06em', color: 'var(--text-muted)', background: 'transparent', border: '1px solid var(--border)', borderRadius: 2, cursor: 'pointer' }}
               onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-elevated)'; e.currentTarget.style.color = 'var(--text-primary)' }}
               onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)' }}>
@@ -418,7 +466,6 @@ export default function CohortDCFModel() {
             </button>
           </div>
 
-          {/* Charts */}
           <div>
             <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 4, padding: '18px 20px', marginBottom: 16 }}>
               <p style={{ fontFamily: 'var(--font-sans)', fontSize: '0.68rem', letterSpacing: '0.1em', color: 'var(--text-muted)', textTransform: 'uppercase' as const, marginBottom: 14 }}>PV Gross Profit par année — base existante</p>
@@ -428,7 +475,7 @@ export default function CohortDCFModel() {
                   const h = Math.max(4, (row.pvGP / maxPV) * 120)
                   return (
                     <div key={i} title={`Y${row.year}: PV $${row.pvGP.toFixed(2)}B\nNRR ${(row.nrr * 100).toFixed(1)}%`}
-                      style={{ flex: 1, display: 'flex', flexDirection: 'column' as const, alignItems: 'center', gap: 4, cursor: 'default' }}>
+                      style={{ flex: 1, display: 'flex', flexDirection: 'column' as const, alignItems: 'center', gap: 4 }}>
                       <div style={{ fontSize: '0.55rem', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', lineHeight: 1 }}>{row.pvGP.toFixed(1)}</div>
                       <div style={{ width: '80%', height: h, background: row.ratio < 1 ? '#cc000088' : `hsl(${210 - i * 8}, 70%, ${45 + i * 2}%)`, borderRadius: '2px 2px 0 0', transition: 'height 0.3s ease' }} />
                       <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.55rem', color: 'var(--text-muted)' }}>Y{row.year}</div>
@@ -457,14 +504,14 @@ export default function CohortDCFModel() {
             <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 4, overflow: 'hidden' }}>
               <div style={{ padding: '12px 20px', borderBottom: '1px solid var(--border)', fontFamily: 'var(--font-sans)', fontSize: '0.68rem', letterSpacing: '0.1em', color: 'var(--text-muted)', textTransform: 'uppercase' as const }}>Bridge Equity Value</div>
               {[
-                { label: 'NPV Base existante',     value: res.sumPV,         indent: 0 },
-                { label: 'PV Terminal Value',       value: res.pvTV,          indent: 0 },
-                { label: 'NPV Nouveaux logos',      value: params.npvLogos,   indent: 0 },
-                { label: 'EV Cohort totale',        value: res.evCohort,      indent: 0, total: true },
-                { label: 'SBC dilution',             value: -params.sbc,       indent: 1 },
-                { label: 'Net Cash',                value: params.netCash,    indent: 1 },
-                { label: 'EQUITY VALUE IMPLICITE',  value: res.equityImplied, indent: 0, total: true, accent: true },
-                { label: 'Market Cap actuelle',     value: params.mktCap,     indent: 0, muted: true },
+                { label: 'NPV Base existante',    value: res.sumPV,         indent: 0 },
+                { label: 'PV Terminal Value',      value: res.pvTV,          indent: 0 },
+                { label: 'NPV Nouveaux logos',     value: params.npvLogos,   indent: 0 },
+                { label: 'EV Cohort totale',       value: res.evCohort,      indent: 0, total: true },
+                { label: 'SBC dilution',            value: -params.sbc,       indent: 1 },
+                { label: 'Net Cash',               value: params.netCash,    indent: 1 },
+                { label: 'EQUITY VALUE IMPLICITE', value: res.equityImplied, indent: 0, total: true, accent: true },
+                { label: 'Market Cap actuelle',    value: params.mktCap,     indent: 0, muted: true },
               ].map((row, i) => (
                 <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: `${(row as any).total ? 10 : 8}px ${20 + row.indent * 12}px`, borderBottom: '1px solid var(--border)', background: (row as any).accent ? 'var(--bg-elevated)' : (row as any).total ? 'rgba(0,0,0,0.02)' : 'transparent', borderTop: (row as any).total ? '1px solid var(--border-strong)' : 'none' }}>
                   <span style={{ fontFamily: (row as any).total ? 'var(--font-sans)' : 'var(--font-body)', fontSize: (row as any).total ? '0.78rem' : '0.82rem', fontWeight: (row as any).total ? 600 : 300, color: (row as any).muted ? 'var(--text-muted)' : 'var(--text-secondary)', letterSpacing: (row as any).total ? '0.04em' : '0' }}>{row.label}</span>

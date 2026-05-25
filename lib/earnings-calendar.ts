@@ -1,13 +1,11 @@
 // ── Earnings Calendar — logique de cache ─────────────────────────────────
-// Détermine si les données d'un ticker doivent être rafraîchies
-// en fonction des dates de publications et de la fenêtre ±5 jours.
 
 export type CacheStatus =
-  | 'fresh'        // cache valide, hors fenêtre earnings, postérieur à last_earnings
-  | 'stale'        // cache antérieur à la dernière publication → rafraîchir
-  | 'window_24h'   // dans la fenêtre earnings ±5j → TTL 24h
-  | 'expired_24h'  // dans la fenêtre earnings, cache > 24h → rafraîchir
-  | 'missing'      // pas de cache
+  | 'fresh'
+  | 'stale'
+  | 'window_24h'
+  | 'expired_24h'
+  | 'missing'
 
 export interface CacheEntry {
   fetchedAt:          Date
@@ -16,8 +14,8 @@ export interface CacheEntry {
   earningsQuality:    'confirmed' | 'estimated' | 'unknown'
 }
 
-const WINDOW_DAYS = 5      // ±5 jours autour de la publication
-const TTL_WINDOW_MS = 24 * 60 * 60 * 1000  // 24h en millisecondes
+const WINDOW_DAYS    = 5
+const TTL_WINDOW_MS  = 24 * 60 * 60 * 1000
 
 function daysDiff(a: Date, b: Date): number {
   return Math.abs((a.getTime() - b.getTime()) / (1000 * 60 * 60 * 24))
@@ -25,27 +23,16 @@ function daysDiff(a: Date, b: Date): number {
 
 export function getCacheStatus(entry: CacheEntry | null): CacheStatus {
   if (!entry) return 'missing'
-
   const now = new Date()
   const { fetchedAt, lastEarningsDate, nextEarningsDate } = entry
-
-  // 1. Cache antérieur à la dernière publication → périmé
-  if (lastEarningsDate && fetchedAt < lastEarningsDate) {
-    return 'stale'
-  }
-
-  // 2. Dans la fenêtre de la prochaine publication (±5j)
+  if (lastEarningsDate && fetchedAt < lastEarningsDate) return 'stale'
   if (nextEarningsDate) {
     const daysToNext = (nextEarningsDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
-    const inWindow = daysToNext >= -WINDOW_DAYS && daysToNext <= WINDOW_DAYS
-
-    if (inWindow) {
+    if (daysToNext >= -WINDOW_DAYS && daysToNext <= WINDOW_DAYS) {
       const cacheAge = now.getTime() - fetchedAt.getTime()
       return cacheAge > TTL_WINDOW_MS ? 'expired_24h' : 'window_24h'
     }
   }
-
-  // 3. Hors fenêtre, cache postérieur à last_earnings → valide indéfiniment
   return 'fresh'
 }
 
@@ -56,7 +43,6 @@ export function shouldRefresh(status: CacheStatus): boolean {
 export function getCacheLabel(entry: CacheEntry, status: CacheStatus): string {
   const fmt = (d: Date) =>
     d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })
-
   switch (status) {
     case 'fresh':
       return `Données du ${fmt(entry.fetchedAt)}${
@@ -73,4 +59,21 @@ export function getCacheLabel(entry: CacheEntry, status: CacheStatus): string {
     default:
       return ''
   }
+}
+
+// ── Détermine si la market cap doit être rafraîchie via FMP ──────────────
+// confirmed : fenêtre ±1 jour (date de publication fiable)
+// estimated : fenêtre ±10 jours (date calculée à partir du last earning)
+// unknown   : jamais (pas de date, on garde le cache)
+export function needsMktCapRefresh(cached: {
+  next_earnings_date:   string | null
+  earnings_date_quality: string | null
+}): boolean {
+  const quality  = cached.earnings_date_quality
+  const nextDate = cached.next_earnings_date
+  if (!nextDate || quality === 'unknown' || !quality) return false
+  const windowDays = quality === 'confirmed' ? 1 : 10
+  const windowMs   = windowDays * 24 * 60 * 60 * 1000
+  const msToNext   = new Date(nextDate).getTime() - Date.now()
+  return Math.abs(msToNext) <= windowMs
 }
