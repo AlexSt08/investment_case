@@ -2,14 +2,14 @@
 
 :root {
   /* ── FT Palette ── */
-  --bg:           #fff1e5;        /* FT cream */
-  --bg-card:      #fdf5ec;        /* slightly lighter cream */
-  --bg-elevated:  #f8ede0;        /* warm card */
-  --bg-dark:      #1a1a1a;        /* dark sections */
+  --bg:           #fff1e5;
+  --bg-card:      #fdf5ec;
+  --bg-elevated:  #f8ede0;
+  --bg-dark:      #1a1a1a;
 
   --border:       rgba(0,0,0,0.1);
   --border-strong:rgba(0,0,0,0.18);
-  --border-rule:  #ccc0b3;        /* FT column rule */
+  --border-rule:  #ccc0b3;
 
   /* ── Text ── */
   --text-primary:   #1a1a1a;
@@ -18,14 +18,14 @@
   --text-light:     #a0a0a0;
 
   /* ── FT Brand ── */
-  --ft-red:         #cc0000;       /* FT masthead red */
+  --ft-red:         #cc0000;
   --ft-red-dark:    #990000;
-  --ft-pink:        #fff1e5;       /* FT background pink */
-  --ft-teal:        #0d7680;       /* FT teal accent */
-  --ft-slate:       #262a33;       /* FT dark header */
-  --ft-claret:      #800018;       /* FT claret for special content */
+  --ft-pink:        #fff1e5;
+  --ft-teal:        #0d7680;
+  --ft-slate:       #262a33;
+  --ft-claret:      #800018;
 
-  /* ── Accent (replaces gold) ── */
+  /* ── Accent ── */
   --accent:         #cc0000;
   --accent-dim:     rgba(204,0,0,0.06);
   --accent-border:  rgba(204,0,0,0.2);
@@ -77,7 +77,7 @@ body {
   padding: 0 24px;
 }
 
-/* ── Navigation — FT style ── */
+/* ── Navigation ── */
 nav {
   position: sticky;
   top: 0;
@@ -91,7 +91,6 @@ nav {
   display: block;
 }
 
-/* Prevent any parent from constraining nav width */
 nav, nav * { max-width: none; }
 nav .nav-inner { max-width: var(--max-width); }
 
@@ -114,9 +113,7 @@ nav .nav-inner { max-width: var(--max-width); }
   letter-spacing: -0.01em;
 }
 
-.nav-logo span {
-  color: var(--ft-red);
-}
+.nav-logo span { color: var(--ft-red); }
 
 .nav-links {
   display: flex;
@@ -139,7 +136,7 @@ nav .nav-inner { max-width: var(--max-width); }
 .nav-links a:hover { color: #ffffff; }
 .nav-links a.active { color: var(--ft-red); border-bottom: 2px solid var(--ft-red); padding-bottom: 2px; }
 
-/* ── Masthead / Hero bar ── */
+/* ── Masthead ── */
 .masthead {
   background: var(--ft-slate);
   padding: 16px 24px 14px;
@@ -147,7 +144,7 @@ nav .nav-inner { max-width: var(--max-width); }
   border-bottom: 3px solid var(--ft-red);
 }
 
-/* ── Section label — FT style ── */
+/* ── Section label ── */
 .section-label {
   font-family: var(--font-sans);
   font-size: 0.68rem;
@@ -159,17 +156,8 @@ nav .nav-inner { max-width: var(--max-width); }
 }
 
 /* ── Divider ── */
-.divider {
-  height: 1px;
-  background: var(--border-rule);
-  margin: 32px 0;
-}
-
-.divider-thick {
-  height: 3px;
-  background: var(--ft-red);
-  margin: 0 0 24px;
-}
+.divider       { height: 1px; background: var(--border-rule); margin: 32px 0; }
+.divider-thick { height: 3px; background: var(--ft-red); margin: 0 0 24px; }
 
 /* ── Rating Badge ── */
 .badge-rating {
@@ -208,7 +196,7 @@ nav .nav-inner { max-width: var(--max-width); }
 
 .badge-ticker:hover { background: var(--ft-red); }
 
-/* ── Cards — newspaper style ── */
+/* ── Cards ── */
 .card {
   background: transparent;
   border-top: var(--col-rule);
@@ -228,22 +216,15 @@ nav .nav-inner { max-width: var(--max-width); }
   text-decoration-color: var(--ft-red);
 }
 
-/* ── Grid — newspaper columns ── */
+/* ── Grid ── */
 .grid-cases {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 0 32px;
 }
 
-.grid-cases .card {
-  border-top: 3px solid var(--ft-red);
-  padding-top: 16px;
-}
-
-.grid-cases .card:not(:nth-child(3n)) {
-  border-right: var(--col-rule);
-  padding-right: 32px;
-}
+.grid-cases .card { border-top: 3px solid var(--ft-red); padding-top: 16px; }
+.grid-cases .card:not(:nth-child(3n)) { border-right: var(--col-rule); padding-right: 32px; }
 
 /* ── Article content ── */
 .prose {
@@ -285,18 +266,8 @@ nav .nav-inner { max-width: var(--max-width); }
   color: var(--ft-red);
 }
 
-.prose p {
-  margin-bottom: 18px;
-  color: var(--text-secondary);
-  font-weight: 300;
-  text-align: justify;
-}
-
-.prose ul, .prose ol {
-  margin: 14px 0 18px 20px;
-  color: var(--text-secondary);
-}
-
+.prose p { margin-bottom: 18px; color: var(--text-secondary); font-weight: 300; text-align: justify; }
+.prose ul, .prose ol { margin: 14px 0 18px 20px; color: var(--text-secondary); }
 .prose li { margin-bottom: 6px; font-weight: 300; text-align: justify; }
 .prose strong { color: var(--text-primary); font-weight: 600; }
 .prose em { font-style: italic; color: var(--text-secondary); }
@@ -332,22 +303,11 @@ nav .nav-inner { max-width: var(--max-width); }
   text-align: left;
 }
 
-.prose td {
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--border-rule);
-  color: var(--text-secondary);
-}
-
+.prose td { padding: 8px 12px; border-bottom: 1px solid var(--border-rule); color: var(--text-secondary); }
 .prose tr:nth-child(even) td { background: rgba(0,0,0,0.02); }
-
 .prose a { color: var(--ft-teal); text-decoration: underline; }
 .prose a:hover { color: var(--ft-red); }
-
-.prose hr {
-  border: none;
-  border-top: 1px solid var(--border-rule);
-  margin: 32px 0;
-}
+.prose hr { border: none; border-top: 1px solid var(--border-rule); margin: 32px 0; }
 
 /* ── Footer ── */
 footer {
@@ -375,7 +335,7 @@ footer {
   line-height: 1.6;
 }
 
-/* ── Forms — admin ── */
+/* ── Forms ── */
 .form-group { margin-bottom: 20px; }
 
 .form-label {
@@ -423,24 +383,11 @@ footer {
   letter-spacing: 0.04em;
 }
 
-.btn-primary {
-  background: var(--ft-red);
-  color: #ffffff;
-}
+.btn-primary { background: var(--ft-red); color: #ffffff; }
 .btn-primary:hover { background: var(--ft-red-dark); }
-
-.btn-ghost {
-  background: transparent;
-  color: var(--text-secondary);
-  border: 1px solid var(--border-rule);
-}
+.btn-ghost { background: transparent; color: var(--text-secondary); border: 1px solid var(--border-rule); }
 .btn-ghost:hover { background: var(--bg-elevated); color: var(--text-primary); border-color: var(--border-strong); }
-
-.btn-danger {
-  background: var(--sell-bg);
-  color: var(--sell);
-  border: 1px solid rgba(204,0,0,0.2);
-}
+.btn-danger { background: var(--sell-bg); color: var(--sell); border: 1px solid rgba(204,0,0,0.2); }
 
 /* ── Admin toolbar ── */
 .admin-toolbar {
@@ -480,7 +427,7 @@ footer {
 .animate-in-delay-2 { animation-delay: 0.16s; opacity: 0; }
 .animate-in-delay-3 { animation-delay: 0.24s; opacity: 0; }
 
-/* ── FT-style utility classes ── */
+/* ── FT utility classes ── */
 .ft-rule-top    { border-top: 3px solid var(--ft-red); padding-top: 16px; }
 .ft-rule-bottom { border-bottom: 1px solid var(--border-rule); padding-bottom: 16px; }
 .ft-byline      { font-family: var(--font-sans); font-size: 0.75rem; color: var(--text-muted); letter-spacing: 0.04em; }
@@ -489,17 +436,9 @@ footer {
 
 /* ── Responsive ── */
 @media (max-width: 900px) {
-  .grid-cases {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  .grid-cases .card:nth-child(2n) {
-    border-right: none;
-    padding-right: 0;
-  }
-  .grid-cases .card:nth-child(3n) {
-    border-right: var(--col-rule);
-    padding-right: 32px;
-  }
+  .grid-cases { grid-template-columns: repeat(2, 1fr); }
+  .grid-cases .card:nth-child(2n) { border-right: none; padding-right: 0; }
+  .grid-cases .card:nth-child(3n) { border-right: var(--col-rule); padding-right: 32px; }
 }
 
 @media (max-width: 600px) {
@@ -509,20 +448,14 @@ footer {
   .footer-inner { flex-direction: column; }
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   αAlex HTML Template — section articles dans .prose
-   Design V3 · source de vérité : /mnt/skills/user/html-template/SKILL.md
 
-   PRINCIPE DE SÉPARATION :
-   - Ce fichier N'importe PAS les fonts (déjà dans le @import global)
-   - Ce fichier N'ÉCRIT PAS de valeurs hex qui sont déjà dans :root
-   - Les tokens αAlex (#navy, #orange, #gold) sont définis UNE FOIS
-     dans .prose et référencés partout ci-dessous via var()
-   - Toute évolution design se fait d'abord dans le SKILL.md,
-     puis se répercute ici
+/* ═══════════════════════════════════════════════════════════════
+   αAlex Investment Case — composants articles dans .prose
+   Design V3 · source de vérité : /mnt/skills/user/html-template/SKILL.md
+   Règle : aucune valeur hex n'est dupliquée depuis :root
    ═══════════════════════════════════════════════════════════════ */
 
-/* ── Tokens αAlex locaux (complètent :root sans le dupliquer) ── */
+/* ── Tokens αAlex locaux ── */
 .prose {
   --navy:        #0F4761;
   --orange:      #BF4E14;
@@ -530,11 +463,12 @@ footer {
   --rule-alex:   #DDD5C8;
   --quote-bg:    #F5EEE4;
   --flash-bg:    #FFFBF0;
+  --orange-dim:  rgba(191,78,20,0.06);
+  --red-dim:     rgba(204,0,0,0.06);
+  --red-border:  rgba(204,0,0,0.18);
 }
-/* Note : --buy, --sell, --text-secondary, --bg, --font-display,
-   --font-body, --font-sans sont hérités de :root (globals.css) */
 
-/* ── Image d'en-tête ─────────────────────────────────────────── */
+/* ── Image d'en-tête ── */
 .prose .header-image {
   width: 100%;
   height: auto;
@@ -543,7 +477,7 @@ footer {
   border-radius: 3px;
 }
 
-/* ── Identité ────────────────────────────────────────────────── */
+/* ── Identité ── */
 .prose .doc-title {
   font-family: var(--font-display);
   font-size: 2rem;
@@ -565,7 +499,18 @@ footer {
   margin: 0 0 22px;
 }
 
-/* ── Lead — bordure orange αAlex ─────────────────────────────── */
+/* ── Date badge ── */
+.prose .date-badge {
+  font-family: var(--font-sans);
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  text-align: center;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-bottom: 20px;
+}
+
+/* ── Lead ── */
 .prose .lead {
   font-family: var(--font-body);
   font-size: 1rem;
@@ -579,7 +524,7 @@ footer {
   padding-left: 16px;
 }
 
-/* ── Flash actualité — accent or ────────────────────────────── */
+/* ── Flash actualité ── */
 .prose .flash-actu {
   background: var(--flash-bg);
   border: 1px solid var(--gold);
@@ -609,7 +554,7 @@ footer {
   margin: 0;
 }
 
-/* ── KPI Strip — bordure simulée par gap ─────────────────────── */
+/* ── KPI Strip ── */
 .prose .kpi-strip {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -619,10 +564,7 @@ footer {
   margin: 24px 0;
 }
 
-.prose .kpi-cell {
-  background: var(--bg);
-  padding: 13px 15px;
-}
+.prose .kpi-cell { background: var(--bg); padding: 13px 15px; }
 
 .prose .kpi-label {
   font-family: var(--font-sans);
@@ -642,10 +584,10 @@ footer {
   margin-bottom: 3px;
 }
 
-.prose .kpi-delta      { font-family: var(--font-sans); font-size: 0.62rem; color: var(--buy); }
-.prose .kpi-delta.neg  { color: var(--sell); }
+.prose .kpi-delta     { font-family: var(--font-sans); font-size: 0.62rem; color: var(--buy); }
+.prose .kpi-delta.neg { color: var(--sell); }
 
-/* ── Titres h2 / h3 — override du .prose global ─────────────── */
+/* ── h2 / h3 override ── */
 .prose h2 {
   font-family: var(--font-display);
   font-size: 1.2rem;
@@ -670,7 +612,7 @@ footer {
   margin-bottom: 9px;
 }
 
-/* ── Quote block ─────────────────────────────────────────────── */
+/* ── Quote block ── */
 .prose .quote-block {
   background: var(--quote-bg);
   border-left: 4px solid var(--navy);
@@ -696,7 +638,165 @@ footer {
   letter-spacing: 0.07em;
 }
 
-/* ── Verdict box ─────────────────────────────────────────────── */
+/* ── Thèse point ── */
+.prose .these-point {
+  border-left: 3px solid var(--rule-alex);
+  padding-left: 16px;
+  margin-bottom: 20px;
+}
+
+.prose .these-num {
+  font-family: var(--font-sans);
+  font-size: 0.78rem;
+  font-weight: 400;
+  letter-spacing: 0.07em;
+  color: var(--navy);
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.prose .metric {
+  font-family: var(--font-sans);
+  font-size: 0.72rem;
+  color: var(--orange);
+  letter-spacing: 0.03em;
+  margin-top: 10px;
+  padding: 8px 12px;
+  background: var(--orange-dim);
+  border-radius: 2px;
+}
+
+/* ── Risk card ── */
+.prose .risk-card {
+  border: 1px solid var(--rule-alex);
+  border-left: 4px solid var(--navy);
+  border-radius: 0 3px 3px 0;
+  padding: 14px 18px;
+  margin-bottom: 16px;
+}
+
+.prose .risk-title {
+  font-family: var(--font-sans);
+  font-size: 0.78rem;
+  font-weight: 400;
+  color: var(--navy);
+  letter-spacing: 0.03em;
+  margin-bottom: 8px;
+}
+
+.prose .risk-card p { margin-bottom: 0; }
+
+/* ── Bias card ── */
+.prose .bias-card {
+  border: 1px solid var(--rule-alex);
+  border-left: 4px solid var(--orange);
+  border-radius: 0 3px 3px 0;
+  padding: 14px 18px;
+  margin-bottom: 16px;
+}
+
+.prose .bias-q {
+  font-family: var(--font-sans);
+  font-size: 0.78rem;
+  font-weight: 400;
+  color: var(--orange);
+  letter-spacing: 0.03em;
+  margin-bottom: 8px;
+}
+
+.prose .bias-card p { margin-bottom: 0; }
+
+/* ── Catalyst items ── */
+.prose .catalyst-item {
+  display: flex;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--rule-alex);
+}
+
+.prose .catalyst-item:last-of-type { border-bottom: none; }
+
+.prose .catalyst-date {
+  font-family: var(--font-sans);
+  font-size: 0.65rem;
+  color: var(--gold);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  min-width: 80px;
+  padding-top: 2px;
+  flex-shrink: 0;
+}
+
+.prose .catalyst-text {
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  font-weight: 300;
+  color: var(--text-secondary);
+  line-height: 1.65;
+}
+
+/* ── Kill grid ── */
+.prose .kill-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.prose .kill-item {
+  font-family: var(--font-sans);
+  font-size: 0.72rem;
+  color: var(--sell);
+  background: var(--sell-bg);
+  border: 1px solid var(--red-border);
+  border-radius: 2px;
+  padding: 8px 12px;
+  line-height: 1.5;
+}
+
+/* ── Competitor table ── */
+.prose .comp-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+}
+
+.prose .comp-table th {
+  background: var(--navy);
+  color: #ffffff;
+  padding: 7px 10px;
+  text-align: left;
+  font-weight: 400;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  font-size: 0.62rem;
+  border: none;
+}
+
+.prose .comp-table td {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--rule-alex);
+  color: var(--text-secondary);
+  font-weight: 300;
+}
+
+.prose .comp-table tr:nth-child(even) td { background: rgba(0,0,0,0.02); }
+
+/* ── Section subtitle ── */
+.prose .section-subtitle {
+  font-family: var(--font-body);
+  font-style: italic;
+  font-weight: 300;
+  color: var(--orange);
+  font-size: 0.95rem;
+  margin-top: -8px;
+  margin-bottom: 14px;
+}
+
+/* ── Verdict box ── */
 .prose .verdict-box {
   background: var(--navy);
   border-radius: 3px;
@@ -735,18 +835,7 @@ footer {
   margin: 0;
 }
 
-/* ── Composant optionnel : section-subtitle ──────────────────── */
-.prose .section-subtitle {
-  font-family: var(--font-body);
-  font-style: italic;
-  font-weight: 300;
-  color: var(--orange);
-  font-size: 0.95rem;
-  margin-top: -8px;
-  margin-bottom: 14px;
-}
-
-/* ── Footer article ──────────────────────────────────────────── */
+/* ── Footer article ── */
 .prose .doc-footer {
   border-top: 1px solid var(--rule-alex);
   padding: 16px 0 8px;
@@ -764,8 +853,19 @@ footer {
   margin-bottom: 3px;
 }
 
-/* ── Responsive ──────────────────────────────────────────────── */
+/* ── Responsive ── */
 @media (max-width: 600px) {
-  .prose .kpi-strip  { grid-template-columns: repeat(2, 1fr); }
-  .prose .kpi-value  { font-size: 1.15rem; }
+  .prose .kpi-strip      { grid-template-columns: repeat(2, 1fr); }
+  .prose .kpi-value      { font-size: 1.15rem; }
+  .prose .kill-grid      { grid-template-columns: 1fr; }
+  .prose .catalyst-item  { flex-direction: column; gap: 4px; }
+  .prose .catalyst-date  { min-width: auto; }
+}
+
+@media print {
+  .prose .verdict-box,
+  .prose .risk-card,
+  .prose .bias-card,
+  .prose .kill-item,
+  .prose .flash-actu { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
