@@ -31,6 +31,20 @@ export const MODELS: Model[] = [
     publishedAt: '2026-05-23',
   },
   {
+    slug: 'eaf-sensitivity',
+    title: 'EAF vs BF-BOF — Sensibilité carbone',
+    subtitle: 'Avantage compétitif EAF selon prix CO₂, mix électrique et géographie',
+    description:
+      'Calcule l\'avantage net de la route EAF scrap vs BF-BOF en fonction du prix carbone, ' +
+      'du mix électrique (hypothèse A bas-carbone / B carbo-intensif) et du contexte géographique ' +
+      '(global vs Europe avec corrélation ETS/électricité). Issu du teaching case EAF B-T v7.',
+    category: 'Macro',
+    tags: ['EAF', 'BF-BOF', 'Carbone', 'Décarbonation', 'CBAM', 'Acier'],
+    complexity: 'Intermédiaire',
+    status: 'live',
+    publishedAt: '2026-05-28',
+  },
+  {
     slug: 'ltv-cac',
     title: 'LTV / CAC — Framework étendu',
     subtitle: 'Unit economics avec ajustement expansion revenue',

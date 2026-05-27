@@ -11,6 +11,7 @@ import { MODELS, getModel, type Model } from '../../lib/models'
 // ── Lazy-load model components ────────────────────────────────────────────
 const MODEL_COMPONENTS: Record<string, React.ComponentType> = {
   'cohort-dcf': dynamic(() => import('../../components/models/CohortDCF'), { ssr: false }),
+  'eaf-sensitivity': dynamic(() => import('../../components/models/EAFSensitivity'), { ssr: false }),
 }
 
 interface Props { model: Model }
