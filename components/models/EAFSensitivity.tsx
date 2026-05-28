@@ -244,7 +244,7 @@ export default function EAFSensitivityModel() {
           onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--ft-teal)')}
           onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border-rule)')}
         >
-          ← Note d’investissement EAF — Teaching case B-T v7
+          ← Note d’investissement EAF
         </a>
         <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', color: 'var(--text-muted)', letterSpacing: '0.06em' }}>
           Modèle de sensibilité · 27/05/2026
